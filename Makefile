@@ -23,7 +23,7 @@ endif
 # CVS checked in
 CC      := g++
 BASEFLAGS  = -Wall -Wextra ${SEARCHDIRS} $(MARCH) \
- -fno-exceptions -fno-rtti -D_REENTRANT 
+ -fno-exceptions -fno-rtti -D_REENTRANT -D_DARWIN_C_SOURCE
 
 #
 
