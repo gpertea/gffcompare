@@ -12,8 +12,8 @@ mkdir $pack/gclib
 libdir=$pack/gclib/
 
 cp -p Makefile gffcompare.cpp gtf_tracking.{h,cpp} $pack/
-cp -p ./gclib/{GVec,GList,GHash}.hh $libdir
-cp -p ./gclib/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $libdir
+cp -p ../gclib/{GVec,GList,GHash}.hh $libdir
+cp -p ../gclib/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $libdir
 tar cvfz $pack.tar.gz $pack
 ls -l $pack.tar.gz
 
