@@ -14,6 +14,6 @@ make release
 cp gffcompare $linpack/
 tar cvfz $linpack.tar.gz $linpack
 ls -l $linpack.tar.gz
-#echo "If you're on igmN machines you can also update the web files:"
-#echo "cp $linpack.tar.gz $pack.tar.gz  ~/html/software/stringtie/dl/"
+echo "If you're on igmN machines you can also update the web files:"
+echo "cp $linpack.tar.gz $pack.tar.gz  ~/html/software/stringtie/dl/"
 #echo "perl -i -pe 's/gffread\-\d\.\d+\.\d+\./gffread-$ver./g' ~/html/software/gffutils/home.shtml"
