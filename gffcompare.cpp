@@ -3,10 +3,10 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.9.4"
+#define VERSION "0.9.5"
 
 #define USAGE "Usage:\n\
-gffcompare [-r <reference_mrna.gtf>] [-R] [-T] [-V] [-s <seq_path>] \n\
+gffcompare [-r <reference_mrna.gtf> [-R]] [-G] [-T] [-V] [-s <seq_path>]\n\
     [-o <outprefix>] [-p <cprefix>] \n\
     {-i <input_gtf_list> | <input1.gtf> [<input2.gtf> .. <inputN.gtf>]}\n\
 \n\
@@ -67,7 +67,7 @@ bool checkFasta=false;
 bool tmapFiles=true;
 bool only_spliced_refs=false;
 int debugCounter=0;
-
+bool gffAnnotate=false;
 int polyrun_range=2000; //polymerase run range 2KB
 double scoreThreshold=0;
 char* cprefix=NULL;
@@ -202,48 +202,48 @@ int main(int argc, char * const argv[]) {
   FILE* finlst=NULL;
   GStr s=args.getOpt('i');
   if (!s.is_empty()) {
-      if (s=='-')
-       finlst=stdin;
-      else {
-       finlst=fopen(s,"r");
-       if (finlst==NULL) GError("Error opening file: %s\n", s.chars());
-             }
-           }
-        int numqryfiles=0;
-        if (finlst) {
-          GLineReader* lr=new GLineReader(finlst);
-          char* l=NULL;
-          while ((l=lr->getLine())!=NULL) {
-            if (strlen(l)<2 || startsWith(l,"# ") || isspace(*l)) continue;
-            if (!fileExists(l)) GError("Error: cannot locate input file: %s\n", l);
-            qryfiles.Add(new GStr(l));
-            }
-          delete lr;
-          //if (qryfiles.Count()>10) 
-          gtf_tracking_largeScale=true;
-          }
-         else {
-          numqryfiles=args.startNonOpt();
-          char *infile=NULL;
-          if (numqryfiles>0) {
-            if (numqryfiles>6) 
-               gtf_tracking_largeScale=true;
-            while ((infile=args.nextNonOpt())!=NULL) {
-              if (!fileExists(infile)) GError("Error: cannot locate input file: %s\n", infile);
-              qryfiles.Add(new GStr(infile));
-              } //for each argument
-            }
-          }
-        numqryfiles=qryfiles.Count();
-        if (numqryfiles==0) {
-          show_usage();
-          exit(1);
-          }
-      if (numqryfiles>MAX_QFILES) {
-           GMessage("Error: too many input files (limit set to %d at compile time)\n",MAX_QFILES);
-           GMessage("(if you need to raise this limit set a new value for\nMAX_QFILES in gtf_tracking.h and recompile)\n");
-           exit(0x5000);
-           }
+	  if (s=='-')
+		  finlst=stdin;
+	  else {
+		  finlst=fopen(s,"r");
+		  if (finlst==NULL) GError("Error opening file: %s\n", s.chars());
+	  }
+  }
+  int numqryfiles=0;
+  if (finlst) {
+	  GLineReader* lr=new GLineReader(finlst);
+	  char* l=NULL;
+	  while ((l=lr->getLine())!=NULL) {
+		  if (strlen(l)<2 || startsWith(l,"# ") || isspace(*l)) continue;
+		  if (!fileExists(l)) GError("Error: cannot locate input file: %s\n", l);
+		  qryfiles.Add(new GStr(l));
+	  }
+	  delete lr;
+	  //if (qryfiles.Count()>10)
+	  gtf_tracking_largeScale=true;
+  }
+  else {
+	  numqryfiles=args.startNonOpt();
+	  char *infile=NULL;
+	  if (numqryfiles>0) {
+		  if (numqryfiles>6)
+			  gtf_tracking_largeScale=true;
+		  while ((infile=args.nextNonOpt())!=NULL) {
+			  if (!fileExists(infile)) GError("Error: cannot locate input file: %s\n", infile);
+			  qryfiles.Add(new GStr(infile));
+		  } //for each argument
+	  }
+  }
+  numqryfiles=qryfiles.Count();
+  if (numqryfiles==0) {
+	  show_usage();
+	  exit(1);
+  }
+  if (numqryfiles>MAX_QFILES) {
+	  GMessage("Error: too many input files (limit set to %d at compile time)\n",MAX_QFILES);
+	  GMessage("(if you need to raise this limit set a new value for\nMAX_QFILES in gtf_tracking.h and recompile)\n");
+	  exit(0x5000);
+  }
   gfasta.init(args.getOpt('s'));
    // determine if -s points to a multi-fasta file or a directory
   //s=args.getOpt('c');
@@ -342,11 +342,12 @@ int main(int argc, char * const argv[]) {
   FILE** rtfiles=NULL;
   GMALLOC(qrysdata, numqryfiles*sizeof(GList<GSeqData>*));
   if (tmapFiles) {
-      GMALLOC(tfiles, numqryfiles*sizeof(FILE*));
-      if (haveRefs) {
-          GMALLOC(rtfiles, numqryfiles*sizeof(FILE*));
-          }
-      }
+	  GMALLOC(tfiles, numqryfiles*sizeof(FILE*));
+	  if (haveRefs) {
+		  GMALLOC(rtfiles, numqryfiles*sizeof(FILE*));
+	  }
+  }
+  gffAnnotate=(numqryfiles==1 && discard_redundant==0);
   for (int fi=0;fi<qryfiles.Count();fi++) {
     GStr in_file(qryfiles[fi]->chars());
     GStr infname(getFileName(qryfiles[fi]->chars())); //file name only
@@ -1057,11 +1058,19 @@ int aa_diff(GXConsensus* c1, GXConsensus* c2) {
 */
 void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
  for (int i=0;i<xc->tcons->exons.Count();i++) {
+   if (gffAnnotate) {
+	   //TODO: print "transcript" entry here?
+	   fprintf(fc,
+	     "%s\t%s\texon\t%d\t%d\t.\t%c\t.\tgene_id \"XLOC_%06d\"; transcript_id \"%s\"; exon_number \"%d\";",
+	     xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
+	       xlocnum, xc->tcons->getID(), i+1);
+   }
+   else {
    fprintf(fc,
      "%s\t%s\texon\t%d\t%d\t.\t%c\t.\tgene_id \"XLOC_%06d\"; transcript_id \"%s_%08d\"; exon_number \"%d\";",
      xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
        xlocnum, cprefix, xc->id, i+1);
-    //if (i==0) {
+   }
   const char* gene_name=NULL;
   if (xc->ref) {
      gene_name=xc->ref->getGeneName();
@@ -1078,10 +1087,17 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
       s=xc->tcons->getAttr("class_code", true);
       if (s) fprintf(fc, " class_code \"%s\";", s);
       }
-   fprintf(fc, " oId \"%s\";",xc->tcons->getID());
-   if (xc->contained) {
-     fprintf(fc, " contained_in \"%s_%08d\";", cprefix, xc->contained->id);
-     }
+   if (gffAnnotate) {
+	      if (xc->contained) {
+	        fprintf(fc, " contained_in \"%s\";", xc->contained->tcons->getID());
+	        }
+   }
+   else {
+      fprintf(fc, " oId \"%s\";",xc->tcons->getID());
+      if (xc->contained) {
+        fprintf(fc, " contained_in \"%s_%08d\";", cprefix, xc->contained->id);
+        }
+   }
    if (haveRefs) {
      if (xc->ref!=NULL)
        fprintf(fc, " nearest_ref \"%s\";",xc->ref->getID());
@@ -1089,7 +1105,6 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
      }
    if (xc->tss_id>0) fprintf(fc, " tss_id \"TSS%d\";",xc->tss_id);
    if (xc->p_id>0) fprintf(fc, " p_id \"P%d\";",xc->p_id);
-   //      }
    fprintf(fc,"\n");
    }
 }
