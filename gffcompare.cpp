@@ -49,7 +49,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-G] [-T] [-V] [-s <seq_path>]\n\
  -F do not discard intron-redundant transfrags if they share the 5' end\n\
     (if they differ only at the 3' end)\n\
  -G generic GFF input file(s): do not assume Cufflinks/Stringtie GTF input,\n\
-    i.e. do not discard intron-redundant transfrags\n\
+    (do not discard intron-redundant transfrags)\n\
  -T do not generate .tmap and .refmap files for each input file\n\
  -V verbose processing mode (also showing GFF parser warnings)\n\
  -D (debug mode) enables -V and generates additional files: \n\
@@ -347,7 +347,7 @@ int main(int argc, char * const argv[]) {
 		  GMALLOC(rtfiles, numqryfiles*sizeof(FILE*));
 	  }
   }
-  gffAnnotate=(numqryfiles==1 && discard_redundant==0);
+  gffAnnotate=(numqryfiles==1 && discard_redundant==0 && haveRefs);
   for (int fi=0;fi<qryfiles.Count();fi++) {
     GStr in_file(qryfiles[fi]->chars());
     GStr infname(getFileName(qryfiles[fi]->chars())); //file name only
@@ -1057,55 +1057,79 @@ int aa_diff(GXConsensus* c1, GXConsensus* c2) {
 }
 */
 void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
- for (int i=0;i<xc->tcons->exons.Count();i++) {
-   if (gffAnnotate) {
-	   //TODO: print "transcript" entry here?
-	   fprintf(fc,
-	     "%s\t%s\texon\t%d\t%d\t.\t%c\t.\tgene_id \"XLOC_%06d\"; transcript_id \"%s\"; exon_number \"%d\";",
-	     xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
-	       xlocnum, xc->tcons->getID(), i+1);
-   }
-   else {
-   fprintf(fc,
-     "%s\t%s\texon\t%d\t%d\t.\t%c\t.\tgene_id \"XLOC_%06d\"; transcript_id \"%s_%08d\"; exon_number \"%d\";",
-     xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
-       xlocnum, cprefix, xc->id, i+1);
-   }
-  const char* gene_name=NULL;
-  if (xc->ref) {
-     gene_name=xc->ref->getGeneName();
-     if (gene_name==NULL) gene_name=xc->ref->getGeneID();
-     if (gene_name) {
-       fprintf (fc, " gene_name \"%s\";", gene_name);
-       }
-   }
-   if (!haveRefs) {
-      if (gene_name==NULL && xc->tcons->getGeneName())
-        fprintf (fc, " gene_name \"%s\";", xc->tcons->getGeneName());
-      char* s=xc->tcons->getAttr("nearest_ref", true);
-      if (s) fprintf(fc, " nearest_ref \"%s\";",s);
-      s=xc->tcons->getAttr("class_code", true);
-      if (s) fprintf(fc, " class_code \"%s\";", s);
-      }
-   if (gffAnnotate) {
+ GStr t_id, g_id, xloc;
+ GStr gene_name(xc->tcons->getGeneName());//always preserve original gene_name if present
+ if (gffAnnotate) {
+	 t_id=xc->tcons->getID();
+	 g_id=xc->tcons->getGeneID();
+	 if (g_id.is_empty()) g_id.appendfmt("XLOC_%06d",xlocnum);
+	 else xloc.appendfmt("XLOC_%06d",xlocnum);
+ }
+  else {
+ 	 t_id.appendfmt("%s_%08d",cprefix, xc->id);
+	 g_id.appendfmt("XLOC_%06d",xlocnum);
+ }
+ fprintf(fc,
+   "%s\t%s\ttranscript\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\";"  ,
+   xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->start, xc->tcons->end, xc->tcons->strand,
+     t_id.chars(), g_id.chars());
+ if (gene_name.is_empty() && xc->ref) {
+    gene_name=xc->ref->getGeneName();
+    if (gene_name.is_empty())
+    	gene_name=xc->ref->getGeneID(); //sure we want this?
+ }
+ //if (gene_name.is_empty() && xc->tcons->getGeneName())
+ if (!gene_name.is_empty())
+	 fprintf (fc, " gene_name \"%s\";", gene_name.chars());
+
+ if (!xloc.is_empty())
+	 fprintf(fc, " xloc \"%s\";",xloc.chars());
+
+ if (gffAnnotate) {
+	 //preserve ref_gene_id attribute
+	 char* s=xc->tcons->getAttr("ref_gene_id", true);
+	 if (s) fprintf(fc, " ref_gene_id \"%s\";", s);
+ }
+ if (gffAnnotate) {
 	      if (xc->contained) {
 	        fprintf(fc, " contained_in \"%s\";", xc->contained->tcons->getID());
 	        }
-   }
-   else {
-      fprintf(fc, " oId \"%s\";",xc->tcons->getID());
-      if (xc->contained) {
-        fprintf(fc, " contained_in \"%s_%08d\";", cprefix, xc->contained->id);
-        }
-   }
-   if (haveRefs) {
-     if (xc->ref!=NULL)
-       fprintf(fc, " nearest_ref \"%s\";",xc->ref->getID());
-     fprintf(fc, " class_code \"%c\";",xc->refcode ? xc->refcode : '.');
-     }
-   if (xc->tss_id>0) fprintf(fc, " tss_id \"TSS%d\";",xc->tss_id);
-   if (xc->p_id>0) fprintf(fc, " p_id \"P%d\";",xc->p_id);
-   fprintf(fc,"\n");
+ }
+ else {
+     fprintf(fc, " oId \"%s\";",xc->tcons->getID());
+     if (xc->contained) {
+       fprintf(fc, " contained_in \"%s_%08d\";", cprefix, xc->contained->id);
+       }
+ }
+ if (haveRefs) {
+    if (xc->ref)
+        fprintf(fc, " cmp_ref \"%s\";",xc->ref->getID());
+    fprintf(fc, " class_code \"%c\";",xc->refcode ? xc->refcode : '.');
+    if (xc->ref) {
+      GStr ref_gname(xc->ref->getGeneName());
+      if (ref_gname.is_empty()) ref_gname=xc->ref->getGeneID();
+      if (!ref_gname.is_empty() && ref_gname!=gene_name)
+        fprintf(fc, " cmp_ref_gene \"%s\";",ref_gname.chars());
+    }
+ }
+ else { //if no reference, preserve existing class annotation if any
+	char* s=xc->tcons->getAttr("cmp_ref", true);
+	if (s) fprintf(fc, " cmp_ref \"%s\";",s);
+	s=xc->tcons->getAttr("class_code", true);
+	if (s) fprintf(fc, " class_code \"%s\";", s);
+	s=xc->tcons->getAttr("cmp_ref_gene", true);
+	if (s) fprintf(fc, " cmp_ref_gene \"%s\";",s);
+ }
+ if (xc->tss_id>0) fprintf(fc, " tss_id \"TSS%d\";",xc->tss_id);
+ if (xc->p_id>0) fprintf(fc, " p_id \"P%d\";",xc->p_id);
+ fprintf(fc,"\n");
+ //now print exons
+ for (int i=0;i<xc->tcons->exons.Count();i++) {
+   fprintf(fc,
+     "%s\t%s\texon\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\"; exon_number \"%d\";\n",
+     xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
+	 t_id.chars(), g_id.chars(), i+1);
+       //xlocnum, cprefix, xc->id, i+1);
    }
 }
 
@@ -1270,7 +1294,7 @@ void writeIntron(FILE* f, char strand, GFaSeqGet* faseq, GSeg& iseg,
    const char* gseq=faseq->subseq(iseg.start, ilen);
    char* cseq=Gstrdup(gseq, gseq+ilen-1);
    if (strand=='-') reverseComplement(cseq, ilen);
-   fprintf(f,"spl=\"%c%c..%c%c\"; ", toupper(cseq[0]),toupper(cseq[1]),
+   fprintf(f,"spl \"%c%c..%c%c\"; ", toupper(cseq[0]),toupper(cseq[1]),
            toupper(cseq[ilen-2]),toupper(cseq[ilen-1]));
    GFREE(cseq);
    }
@@ -2563,8 +2587,6 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
   }//ref locus loop
 }
 
-
-
 void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** ftr, FILE** frs) {
   FILE* f_ltrack=NULL;
   FILE* f_itrack=NULL;
@@ -2578,7 +2600,9 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
     if (f_itrack==NULL) GError("Error creating file %s !\n",s.chars());
   //  }
   s=fbasename;
-  s.append(".combined.gtf");
+  if (gffAnnotate) s.append(".annotated.gtf");
+              else s.append(".combined.gtf");
+
   f_ctrack=fopen(s.chars(),"w");
   if (f_ctrack==NULL) GError("Error creating file %s !\n",s.chars());
   
