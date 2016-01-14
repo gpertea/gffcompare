@@ -169,7 +169,7 @@ int cmpGTrackByName(const pointer p1, const pointer p2) {
 
 void show_usage() {
   GMessage("gffcompare v%s\n", VERSION);
-  GMessage( "-----------------------------\n");
+  GMessage( "-----------------------------\n"); 
   GMessage("%s\n", USAGE);
   }
 
