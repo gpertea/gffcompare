@@ -1,13 +1,6 @@
-# Useful directories
-
-THISCODEDIR := .
 GCLDIR := ../gclib
-# Directory where libz.a can be found
-# (please build that first before making this package) 
-# ZDIR := ../zlib
-# Directories to search for header files
-#SEARCHDIRS := -I${ZDIR} -I${THISCODEDIR} -I${GCLDIR}
-SEARCHDIRS := -I${THISCODEDIR} -I${GCLDIR}
+
+INCDIRS := -I. -I${GCLDIR}
 
 SYSTYPE :=     $(shell uname)
 
@@ -22,7 +15,7 @@ endif
 
 # CVS checked in
 CC      := g++
-BASEFLAGS  = -Wall -Wextra ${SEARCHDIRS} $(MARCH) \
+BASEFLAGS  = -Wall -Wextra ${INCDIRS} $(MARCH) \
  -fno-exceptions -fno-rtti -D_REENTRANT -D_DARWIN_C_SOURCE
 
 #
