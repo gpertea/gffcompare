@@ -12,7 +12,7 @@ echo "-------------------"
 mkdir $linpack
 cd $srcpack
 make clean
-make release
+make static
 cp LICENSE gffcompare ../$linpack/
 cd ..
 tar cvfz $linpack.tar.gz $linpack
