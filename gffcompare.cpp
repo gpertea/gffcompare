@@ -189,7 +189,7 @@ int main(int argc, char * const argv[]) {
     }
   if (args.getOpt('h')!=NULL){
     show_usage();
-    exit(1);
+    exit(0);
     }
   showContained=(args.getOpt('C')!=NULL);
   debug=(args.getOpt('D')!=NULL);
