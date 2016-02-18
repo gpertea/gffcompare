@@ -11,7 +11,7 @@ echo "-------------------"
 mkdir $linpack
 make clean
 make release
-cp gffcompare $linpack/
+cp LICENSE gffcompare $linpack/
 tar cvfz $linpack.tar.gz $linpack
 ls -l $linpack.tar.gz
 #echo "If you're on igmN machines you can also update the web files:"
