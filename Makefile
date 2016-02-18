@@ -1,13 +1,6 @@
-# Useful directories
-
-THISCODEDIR := .
 GCLDIR := ../gclib
-# Directory where libz.a can be found
-# (please build that first before making this package) 
-# ZDIR := ../zlib
-# Directories to search for header files
-#SEARCHDIRS := -I${ZDIR} -I${THISCODEDIR} -I${GCLDIR}
-SEARCHDIRS := -I${THISCODEDIR} -I${GCLDIR}
+
+INCDIRS := -I. -I${GCLDIR}
 
 SYSTYPE :=     $(shell uname)
 
@@ -22,24 +15,48 @@ endif
 
 # CVS checked in
 CC      := g++
-BASEFLAGS  = -Wall -Wextra ${SEARCHDIRS} $(MARCH) \
+BASEFLAGS  = -Wall -Wextra ${INCDIRS} $(MARCH) \
  -fno-exceptions -fno-rtti -D_REENTRANT -D_DARWIN_C_SOURCE
 
 #
 
-ifeq ($(findstring release,$(MAKECMDGOALS)),)
-  CFLAGS = -g -DDEBUG $(BASEFLAGS)
-  LDFLAGS = -g
-  #LDFLAGS = -g -Wl,--eh-frame-hdr -L/opt/geo/lib
-  LIBS = 
-  # use these instead, for HEAP Profiling with gproftools 
-  #CFLAGS = -g -DDEBUG -DHEAPROFILE -I/opt/geo/include $(BASEFLAGS)
-  #LDFLAGS = -g -Wl,--eh-frame-hdr -L/opt/geo/lib
-  #LIBS = -ltcmalloc
-else
-  CFLAGS = -O2 -DNDEBUG $(BASEFLAGS)
+ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
+  # -- release build
+  CFLAGS = -O3 -DNDEBUG $(BASEFLAGS)
   LDFLAGS = 
   LIBS = 
+  ifneq (,$(findstring static,$(MAKECMDGOALS)))
+    LDFLAGS += -static-libstdc++ -static-libgcc
+  endif
+else # debug build
+  ifneq (,$(filter %memcheck %memdebug, $(MAKECMDGOALS)))
+     #make memcheck : use the statically linked address sanitizer in gcc 4.9.x
+     GCCVER49 := $(shell expr `g++ -dumpversion | cut -f1,2 -d.` \>= 4.9)
+     ifeq "$(GCCVER49)" "0"
+       $(error gcc version 4.9 or greater is required for this build target)
+     endif
+     CFLAGS := -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=address
+     GCCVER5 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 5)
+     ifeq "$(GCCVER5)" "1"
+       CFLAGS += -fsanitize=bounds -fsanitize=float-divide-by-zero -fsanitize=vptr
+       CFLAGS += -fsanitize=float-cast-overflow -fsanitize=object-size
+       #CFLAGS += -fcheck-pointer-bounds -mmpx
+     endif
+     CFLAGS += $(BASEFLAGS)
+     CFLAGS := -g -DDEBUG -D_DEBUG -DGDEBUG -fno-common -fstack-protector $(CFLAGS)
+     LDFLAGS := -g
+     #LIBS := -Wl,-Bstatic -lasan -lubsan -Wl,-Bdynamic -ldl $(LIBS)
+     LIBS := -lasan -lubsan -ldl $(LIBS)
+  else
+    #ifneq (,$(filter %memtrace %memusage %memuse, $(MAKECMDGOALS)))
+    #   BASEFLAGS += -DGMEMTRACE
+    #   GMEMTRACE=1
+    #endif
+    #--- just plain debug build ---
+     CFLAGS = -g -DDEBUG -D_DEBUG -DGDEBUG $(BASEFLAGS)
+     LDFLAGS = -g
+     LIBS = 
+  endif
 endif
 
 %.o : %.c
@@ -69,6 +86,10 @@ OBJS = ${GCLDIR}/GFastaIndex.o ${GCLDIR}/GFaSeqGet.o ${GCLDIR}/gff.o \
 all:    gffcompare
 debug:  gffcompare
 release: gffcompare
+static: gffcompare
+memcheck: gffcompare
+memdebug: gffcompare
+
 ${GCLDIR}/gff.o  : ${GCLDIR}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
 ./gffcompare.o : ./gtf_tracking.h
