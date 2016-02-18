@@ -21,7 +21,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-G] [-T] [-V] [-s <seq_path>]\n\
  across samples).\n\
 \n\
  Options:\n\
- -v display gffcompare version\n\
+ -v display gffcompare version (also --version)\n\
  -i provide a text file with a list of (query) GTF files to process instead\n\
     of expecting them as command line arguments (useful when a large number\n\
     of GTF files should be processed)\n\
@@ -184,18 +184,18 @@ int main(int argc, char * const argv[]) {
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "vXDTMNVFGSCKQRLhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv, "version;help;vXDTMNVFGSCKQRLhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
     GMessage("Invalid argument: %s\n", argv[e]);
     exit(1);
     }
-  if (args.getOpt('h')!=NULL){
+  if (args.getOpt('h') || args.getOpt("help")){
     show_usage();
     exit(0);
     }
-  if (args.getOpt('v')!=NULL){
+  if (args.getOpt('v') || args.getOpt("version")){
     show_version();
     exit(0);
   }
