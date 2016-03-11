@@ -432,7 +432,6 @@ int main(int argc, char * const argv[]) {
       }
       //now report the summary:
       if (!gtf_tracking_largeScale) reportStats(f_out, in_file.chars(), gstats);
-      if (f_in!=stdin) fclose(f_in);
       //qfileno++;
   }//for each input file
   if (f_mintr!=NULL) fclose(f_mintr);
@@ -456,7 +455,6 @@ int main(int argc, char * const argv[]) {
   GFREE(tfiles);
   GFREE(rtfiles);
   gseqtracks.Clear();
-  FRCLOSE(f_ref);
   FWCLOSE(f_out);
   if (gtf_tracking_verbose) GMessage("Done.\n");
   ref_data.Clear();
