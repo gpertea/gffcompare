@@ -16,7 +16,7 @@ endif
 # CVS checked in
 CC      := g++
 BASEFLAGS  = -Wall -Wextra ${INCDIRS} $(MARCH) \
- -fno-exceptions -fno-rtti -D_REENTRANT -D_DARWIN_C_SOURCE
+ -fno-exceptions -fno-rtti -D_REENTRANT
 
 #
 
