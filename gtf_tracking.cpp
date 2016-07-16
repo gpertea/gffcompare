@@ -633,7 +633,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 #endif
 	if (gtf_tracking_verbose && d>0) {
 	  if (isRefData) GMessage(" %d duplicate reference transcripts discarded.\n",d);
-	            else GMessage(" %d redundant cufflinks transfrags discarded.\n",d);
+	            else GMessage(" %d redundant query transfrags discarded.\n",d);
 	  }
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs
@@ -661,7 +661,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	for (int g=0;g<seqdata.Count();g++) {
 		//find the corresponding refseqdata with the same gseq_id
 		int gseq_id=seqdata[g]->get_gseqid();
-		if (!isRefData) { //cufflinks data, find corresponding ref data
+		if (!isRefData) { //query data, find corresponding ref data
 			GSeqData* rdata=getRefData(gseq_id, *ref_data);
 			initial_unoriented+=seqdata[g]->umrnas.Count();
 			if (seqdata[g]->umrnas.Count()>0) {

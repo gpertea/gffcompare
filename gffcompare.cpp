@@ -3,10 +3,10 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.9.6f"
+#define VERSION "0.9.7"
 
 #define USAGE "Usage:\n\
-gffcompare [-r <reference_mrna.gtf> [-R]] [-G] [-T] [-V] [-s <seq_path>]\n\
+gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     [-o <outprefix>] [-p <cprefix>] \n\
     {-i <input_gtf_list> | <input1.gtf> [<input2.gtf> .. <inputN.gtf>]}\n\
 \n\
@@ -41,18 +41,19 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-G] [-T] [-V] [-s <seq_path>]\n\
     repeats must be soft-masked (lower case) in order to be able to classify\n\
     transfrags as repeats\n\
 \n\
- -e max. distance (range) allowed from free ends of terminal exons of reference\n\
-    transcripts when assessing exon accuracy (100)\n\
+ -e max. distance (range) allowed from free ends of terminal exons of\n\
+    reference transcripts when assessing exon accuracy (100)\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
  -p the name prefix to use for consensus transcripts in the \n\
     <outprefix>.combined.gtf file (default: 'TCONS')\n\
- -C include the \"contained\" transcripts in the .combined.gtf file\n\
- -F do not discard intron-redundant transfrags if they share the 5' end\n\
-    (if they differ only at the 3' end)\n\
- -G generic GFF input file(s): do not assume Cufflinks/Stringtie GTF input,\n\
-    (do not discard intron-redundant transfrags)\n\
+ -C discard the \"contained\" transcripts in the .combined.gtf\n\
+    (i.e. collapse intron-redundant transcripts across all query files)\n\
+ -E discard \"contained\" transfrags which are intron compatible with larger\n\
+    transfrags (discard intron-redundant transfrags within a query file)\n\
+ -F discard intron-redundant transfrags unless they only differ at the 3' end\n\
+    and share the 5' end (within the same query file)\n\
  -T do not generate .tmap and .refmap files for each input file\n\
- -V verbose processing mode (also showing GFF parser warnings)\n\
+ -V verbose processing mode (also shows GFF parser warnings)\n\
  -D (debug mode) enables -V and generates additional files: \n\
     <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
 "
@@ -184,7 +185,7 @@ int main(int argc, char * const argv[]) {
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "version;help;vXDTMNVFGSCKQRLhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv, "version;help;vCDTMNVEFSKQRLXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -199,7 +200,7 @@ int main(int argc, char * const argv[]) {
     show_version();
     exit(0);
   }
-  showContained=(args.getOpt('C')!=NULL);
+  showContained=(args.getOpt('C')==NULL);
   debug=(args.getOpt('D')!=NULL);
   tmapFiles=(args.getOpt('T')==NULL);
   multiexon_only=(args.getOpt('M')!=NULL);
@@ -278,19 +279,11 @@ int main(int argc, char * const argv[]) {
     reduceQrys=(args.getOpt('Q')!=NULL);
     //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
     }
-  int discard_redundant=1; //discard intron-redundant input transfrags
-  //generic_GFF=args.getOpt('G');
-  if (args.getOpt('G')) discard_redundant=0; //generic GTF, don't try to discard "redundant" transcripts
-  if (args.getOpt('F')) {
-  	if (discard_redundant==0) {
-  		show_usage();
-  		GMessage("Error: options -F and -G are mutually exclusive!\n");
-  		exit(1);
-  	}
-    else {
-  	discard_redundant=2; // don't discard "redundant" transcripts if they start with the same 5' intron
-    }
-  }
+  int discard_redundant=0; //default: do not discard intron-redundant (contained) query transcripts
+
+  if (args.getOpt('E')) discard_redundant=1; //discard "redundant" query transcripts
+  if (args.getOpt('F'))
+    discard_redundant=2; // discard redundant qry transcripts unless they start with the same 5' intron
   //if a full pathname is given
   //the other common output files will still be created in the current directory:
   // .loci, .tracking, .stats
