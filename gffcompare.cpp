@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.9.7"
+#define VERSION "0.9.8"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -174,7 +174,7 @@ void show_version() {
 
 void show_usage() {
   GMessage("gffcompare v%s\n", VERSION);
-  GMessage( "-----------------------------\n"); 
+  GMessage( "-----------------------------\n");
   GMessage("%s\n", USAGE);
   }
 
@@ -185,7 +185,7 @@ int main(int argc, char * const argv[]) {
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "version;help;vCDTMNVEFSKQRLXhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv, "version;help;vCDTGMNVEFSKQRLXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -204,7 +204,7 @@ int main(int argc, char * const argv[]) {
   debug=(args.getOpt('D')!=NULL);
   tmapFiles=(args.getOpt('T')==NULL);
   multiexon_only=(args.getOpt('M')!=NULL);
-  multiexonrefs_only=(args.getOpt('N')!=NULL); 
+  multiexonrefs_only=(args.getOpt('N')!=NULL);
   perContigStats=(args.getOpt('S')!=NULL);
   checkFasta=(args.getOpt('K')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
@@ -308,7 +308,7 @@ int main(int argc, char * const argv[]) {
   outprefix=outbasename;
   int di=outprefix.rindex(CHPATHSEP);
   if (di>=0) outprefix.cut(0,di+1);
-  
+
   if (debug) { //create a few more files potentially useful for debugging
         s=outbasename;
         s.append(".missed_introns.gtf");
@@ -334,7 +334,7 @@ int main(int argc, char * const argv[]) {
   if (f_out==NULL) GError("Error creating output file %s!\n", outstats.chars());
   if (gtf_tracking_verbose) GMessage("Prefix for output files: %s\n", outprefix.chars());
   fprintf(f_out, "# gffcompare v%s | Command line was:\n#", VERSION);
-  for (int i=0;i<argc-1;i++) 
+  for (int i=0;i<argc-1;i++)
     fprintf(f_out, "%s ", argv[i]);
   fprintf(f_out, "%s\n#\n", argv[argc-1]);
   //int qfileno=0;
@@ -356,13 +356,13 @@ int main(int argc, char * const argv[]) {
     di=indir.rindex(CHPATHSEP);
     if (di>=0) indir.cut(di+1); //directory path for this input file
           else indir=""; //current directory
-    
+
     if (debug || (gtf_tracking_verbose && !gtf_tracking_largeScale))
         GMessage("Loading query file #%d: %s\n",fi+1, in_file.chars());
     if (in_file=="-") { f_in=stdin; in_file="stdin"; }
       else {
         f_in=fopen(in_file.chars(),"r");
-        if (f_in==NULL) 
+        if (f_in==NULL)
             GError("Cannot open input file %s!\n",in_file.chars());
         }
     //f_in is the query gff file to process
@@ -371,7 +371,7 @@ int main(int argc, char * const argv[]) {
     sbase.append(".");
     sbase.append(infname);
     if (tmapFiles) {
-        //-- we should keep the infname path, otherwise the remaining file names 
+        //-- we should keep the infname path, otherwise the remaining file names
         //   may be the same and clobber each other
         s=sbase;
         s.append(".tmap");
@@ -503,9 +503,9 @@ bool ichainMatch(GffObj* t, GffObj* r, bool& exonMatch, int fuzz=0) {
       return false;
       }
   //from now on we expect intron matches up to imax
-  if (i!=j || imax!=jmax) { 
+  if (i!=j || imax!=jmax) {
       exmism=true; //not all introns match, so obviously there's "exon" mismatch
-      //FIXME: fuzz!=0 determines acceptance of *partial* chain match 
+      //FIXME: fuzz!=0 determines acceptance of *partial* chain match
       // but only r as a sub-chain of t, not the other way around!
       if (jmax<imax) return false; // qry ichain cannot be a subchain of ref ichain
       if (fuzz==0) return false;
@@ -968,8 +968,8 @@ class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
      uint nfend=0;
      uint nfstart=0;
      /*
-     if (tsscl.Get(0)->tcons->getGeneID()!=NULL && 
-             c->tcons->getGeneID()!=NULL && 
+     if (tsscl.Get(0)->tcons->getGeneID()!=NULL &&
+             c->tcons->getGeneID()!=NULL &&
             strcmp(tsscl.Get(0)->tcons->getGeneID(), c->tcons->getGeneID()))
         //don't tss cluster if they don't have the same GeneID (?)
         //FIXME: we might not want this if input files are not from Cufflinks
@@ -1132,45 +1132,45 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
    }
 }
 
-void tssCluster(GXLocus& xloc) 
+void tssCluster(GXLocus& xloc)
 {
     GList<GTssCl> xpcls(true,true,false);
-    for (int i=0;i<xloc.tcons.Count();i++) 
+    for (int i=0;i<xloc.tcons.Count();i++)
     {
         GXConsensus* c=xloc.tcons[i];
         //if (c->tcons->exons.Count()<2) continue;  //should we skip single-exon transcripts ??
         GArray<int> mrgloci(true);
         int lfound=0;
-        for (int l=0;l<xpcls.Count();l++) 
+        for (int l=0;l<xpcls.Count();l++)
         {
             if (xpcls[l]->end<c->tcons->exons.First()->start) continue;
             if (xpcls[l]->start>c->tcons->exons.Last()->end) break;
-            if (xpcls[l]->add_Xcons(c)) 
+            if (xpcls[l]->add_Xcons(c))
             {
                 lfound++;
                 mrgloci.Add(l);
-                
+
             }
-            
+
         } // for each xpcluster
-        if (lfound==0) 
+        if (lfound==0)
         {
             //create a xpcl with only this xconsensus
             xpcls.Add(new GTssCl(c));
-            
+
         }
-        else if (lfound>1) 
+        else if (lfound>1)
         {
-            for (int l=1;l<lfound;l++) 
+            for (int l=1;l<lfound;l++)
             {
                 int mlidx=mrgloci[l]-l+1;
                 xpcls[mrgloci[0]]->addMerge(*xpcls[mlidx], c);
                 xpcls.Delete(mlidx);
             }
         }
-        
+
     }//for each xconsensus in this xlocus
-    for (int l=0;l<xpcls.Count();l++) 
+    for (int l=0;l<xpcls.Count();l++)
     {
         //if (xpcls[l]->tsscl.Count()<2) continue;
         tsscl_num++;
@@ -1233,7 +1233,7 @@ void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, GFaSeqGet 
   for (int l=0;l<xloci.Count();l++) {
     if (xloci[l]->qloci.Count()==0) continue;
     GXLocus& xloc=*(xloci[l]);
-    xloc.checkContainment(); 
+    xloc.checkContainment();
     tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
     protCluster(xloc,faseq);
     for (int c=0;c<xloc.tcons.Count();c++) {
@@ -1432,13 +1432,13 @@ void collectCmpData(GSuperLocus& stats, GList<GSuperLocus>& cmpdata) { //, const
  for (int c=0;c<cmpdata.Count();c++) {
    stats.addStats(*cmpdata[c]);
    /*
-   if (f_nloci!=NULL && cmpdata[c]->locusTP==0 && cmpdata[c]->rloci.Count()>0) {       
+   if (f_nloci!=NULL && cmpdata[c]->locusTP==0 && cmpdata[c]->rloci.Count()>0) {
       fprintf(f_nloci, "# Superlocus %s:%d-%d\n",gseqname, cmpdata[c]->start, cmpdata[c]->end);
       for (int l=0;l<cmpdata[c]->rloci.Count();l++) {
          printLocus(f_nloci,*cmpdata[c]->rloci[l], gseqname);
          }
       }
-   */   
+   */
    }
 }
 
@@ -1697,7 +1697,7 @@ void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* 
  GXConsensus* c=new GXConsensus(tcons, ts, ref, ovlcode);
  //xloc->tcons.Add(c);
  //this will also check c against the other tcons for containment:
- xloc->addXCons(c); 
+ xloc->addXCons(c);
 }
 
 
@@ -1707,12 +1707,12 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
   ovlen=0;
   if (!m.overlap(r.start,r.end)) return 0;
   int jmax=r.exons.Count()-1;
-  
+
   if (m.exons.Count()==1) { //single-exon transfrag
      GSeg mseg(m.start, m.end);
      if (jmax==0) { //also single-exon ref
          //ovlen=mseg.overlapLen(r.start,r.end);
-         if (singleExonTMatch(m, r, ovlen)) 
+         if (singleExonTMatch(m, r, ovlen))
                   return '=';
          if (m.covlen<r.covlen && ovlen >= m.covlen*0.8) return 'c'; //fuzzy containment
          return 'o'; //just plain overlapping
@@ -1736,7 +1736,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
   //-- from here on we have a multi-exon transfrag --
   // * check if contained by a ref intron
   for (int j=0;j<jmax;j++) {
-     if (m.end<r.exons[j+1]->start && m.start>r.exons[j]->end) 
+     if (m.end<r.exons[j+1]->start && m.start>r.exons[j]->end)
            return 'i';
      }
   //> check if m's intron chain is a subset of  r's intron chain
@@ -1781,13 +1781,13 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
                           if (mend>rend) j++; else i++;
                           }
     } //while checking intron overlaps
-  
+
   if (icmatch && imend==imax) { // qry intron chain match
      if (jmstart==1 && jmend==jmax) return '='; //identical intron chains
      // -- qry intron chain is shorter than ref intron chain --
      int l_iovh=0;   // overhang of leftmost q exon left boundary beyond the end of ref intron to the left
      int r_iovh=0;   // same type of overhang through the ref intron on the right
-     if (jmstart>1 && r.exons[jmstart-1]->start>m.start) 
+     if (jmstart>1 && r.exons[jmstart-1]->start>m.start)
         l_iovh = r.exons[jmstart-1]->start - m.start;
      if (jmend<jmax && m.end > r.exons[jmend]->end)
         r_iovh = m.end - r.exons[jmend]->end;
@@ -1843,7 +1843,7 @@ for (int q=0;q<qcount-1;q++) { //for each qry dataset
           GffObj* ni_t=loctrack[n]->Get(ni);
           CTData* ni_d=(CTData*)ni_t->uptr;
           bool singleExon=(ni_t->exons.Count()==1 && qi_t->exons.Count()==1);
-          if (ni_d->eqlist!=NULL && 
+          if (ni_d->eqlist!=NULL &&
                  (ni_d->eqlist==qi_d->eqlist || !singleExon)) continue;
           int ovlen=0;
           if ((ni_d->eqlist==qi_d->eqlist && qi_d->eqlist!=NULL) ||
@@ -1940,7 +1940,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
                 else fprintf(ft,"-\t%c", ovlcode);
       GffObj* m=mrnas[i];
       CTData* mdata=(CTData*)m->uptr;
-      
+
       int lastpq=-1;
       /*
       for (int ptab=mdata->qset-lastpq; ptab>0;ptab--)
@@ -1963,7 +1963,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
       */
       eqchain->setUnique(false);
       eqchain->setSorted((GCompareProc*) cmpTData_qset);
-      
+
       for (int k=0;k<eqchain->Count();k++) {
          m=eqchain->Get(k);
          mdata=(CTData*)m->uptr;
@@ -2015,7 +2015,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
     CTData* qtdata=(CTData*)qt.uptr;
     GffObj* rmatch=NULL; //== ref match for this row
     int rovlen=0;
-    //if (qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0)) { 
+    //if (qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0)) {
     if (qtdata->eqhead) {
         //EQ chain head -- transfrag equivalency list starts here
         if (qtdata->eqref==NULL) { //find rloc overlap
@@ -2242,7 +2242,7 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
                 mdata->classcode=mdata->ovls[0]->code;
                 ref=mdata->ovls[0]->mrna;
             }
-            //if (mdata->classcode<33) mdata->classcode='u';      
+            //if (mdata->classcode<33) mdata->classcode='u';
             if (mdata->classcode<47) mdata->classcode='u'; // if 0, '-' or '.'
             if (tmapFiles) {
                 char ref_match_len[2048];
@@ -2296,7 +2296,7 @@ void buildXLoci(GTrackLocus& loctrack, int qcount, GSeqTrack& gtrack, char stran
       if (loctrack[q]==NULL) continue;
       wrkloci = &(loctrack[q]->qloci);
       }
-   
+
    for (int t=0;t<wrkloci->Count();t++) {
       GLocus* loc=wrkloci->Get(t);
       int xfound=0; //count of parent xloci
@@ -2335,7 +2335,7 @@ void buildXLoci(GTrackLocus& loctrack, int qcount, GSeqTrack& gtrack, char stran
             il--;
             xloci->Swap(il,il+1);
             }
-         } //at least one locus is being merged 
+         } //at least one locus is being merged
       }//for each locus
    }//for each set of loci in the region (refs and each qry set)
   //-- add xloci to the global set of xloci unless retxloci was given,
@@ -2448,7 +2448,7 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
   GList<GLocus>* wrkloci=NULL;
   //build xloci without references first
   //then add references only if they overlap an existing xloci
-  
+
   int nq=0;
   for (int q=0;q<=qcount+1;q++) {
     bool refcheck=false;
@@ -2466,7 +2466,7 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
     else if (q==qcount+1) { // check the reference loci
            if (strand=='+') wrkloci=gtrack.rloci_f;
                        else wrkloci=gtrack.rloci_r;
-            
+
            if (wrkloci==NULL) break; //no ref loci here
            refcheck=true;
            }
@@ -2581,7 +2581,7 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
         }
       }
       delete[] clist;
-      delete[] eqlist; 
+      delete[] eqlist;
     }// ref loop
   }//ref locus loop
 }
@@ -2604,7 +2604,7 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
 
   f_ctrack=fopen(s.chars(),"w");
   if (f_ctrack==NULL) GError("Error creating file %s !\n",s.chars());
-  
+
   s=fbasename;
   s.append(".loci");
   f_xloci=fopen(s.chars(),"w");
@@ -2648,8 +2648,8 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
     }
   if (tmapFiles) {
    for (int q=0;q<qcount;q++) {
-        fclose(ftr[q]); 
-        if (haveRefs) fclose(frs[q]); 
+        fclose(ftr[q]);
+        if (haveRefs) fclose(frs[q]);
         }
    }
   if (f_ltrack!=NULL) fclose(f_ltrack);
