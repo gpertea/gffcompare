@@ -226,32 +226,25 @@ public:
 	GffObj* mrna; //owner transcript
 	GLocus* locus;
 	GList<COvLink> ovls; //overlaps with other transcripts (ref vs query)
+	GffObj* dup_of; //redundant transfrag superseded by dup_of (same query file, same locus)
 	//-- just for ichain match tracking:
-	GffObj* eqref; //ref transcript having an ichain match
+	GffObj* eqref; //ref transcript matching this transcript
 	int qset; //qry set index (qfidx), -1 means reference dataset
 	//GffObj* eqnext; //next GffObj in the linked list of matching transfrags
 	bool eqhead;
 	CEqList* eqlist; //keep track of matching transfrags
 	//int eqdata; // flags for EQ list (is it a list head?)
-	// Cufflinks specific data:
-	double FPKM;
-	double conf_hi;
-	double conf_lo;
-	double cov;
 	char classcode; //the best/final classcode
-	CTData(GffObj* m=NULL, GLocus* l=NULL):ovls(true,true,true) {
-		mrna=m;
+	// Stringtie specific data:
+	double FPKM;
+	double TPM;
+	double cov;
+	//double conf_hi;
+	//double conf_lo;
+	CTData(GffObj* m=NULL, GLocus* l=NULL):mrna(m), locus(l), ovls(true,true,true),
+			    dup_of(NULL), eqref(NULL), qset(-2), eqhead(false), eqlist(NULL),
+				classcode(0), FPKM(0), TPM(0), cov(0) {
 		if (mrna!=NULL) mrna->uptr=this;
-		locus=l;
-		classcode=0;
-		eqref=NULL;
-		eqhead=false;
-		eqlist=NULL;
-		qset=-2;
-		FPKM=0;
-		conf_lo=0;
-		conf_hi=0;
-		cov=0;
 	}
 
 	~CTData() {
@@ -1316,12 +1309,12 @@ int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
 				 bool is_ref_set=true,
 				 int check_for_dups=0,
-				 int qfidx=-1, bool only_multiexon=false);
+				 int qfidx=-1, bool only_multiexon=false, bool intron_poking=false, bool keep_dups=false);
 
 //reading a mRNAs from a gff file and grouping them into loci
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data=NULL, 
               int check_for_dups=0, int qfidx=-1, const char* fname=NULL,
-              bool only_multiexon=false);
+              bool only_multiexon=false, bool intron_poking=false, bool keep_dups=false);
 
 void read_transcripts(FILE* f, GList<GSeqData>& seqdata, 
 #ifdef CUFFLINKS

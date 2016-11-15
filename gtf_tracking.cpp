@@ -49,83 +49,85 @@ GffObj* is_RefDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx) {
 }
 
 
-bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5share=false) {
- //two transcripts are "intron redundant" iff one transcript's intron chain
-  // is a sub-chain of the other's
- int imax=ti.exons.Count()-1;
- int jmax=tj.exons.Count()-1;
- if (imax==0 || jmax==0) return false; //don't deal with single-exon transcripts here
- if (ti.exons[imax]->start<tj.exons[0]->end ||
-     tj.exons[jmax]->start<ti.exons[0]->end )
-         return false; //intron chains do not overlap at all
- 
- uint eistart=0, eiend=0, ejstart=0, ejend=0; //exon boundaries
- int i=1; //exon idx to the right of the current intron of ti
- int j=1; //exon idx to the right of the current intron of tj
- //find the first intron overlap:
- while (i<=imax && j<=jmax) {
-    eistart=ti.exons[i-1]->end;
-    eiend=ti.exons[i]->start;
-    ejstart=tj.exons[j-1]->end;
-    ejend=tj.exons[j]->start;
-    if (ejend<eistart) { j++; continue; }
-    if (eiend<ejstart) { i++; continue; }
-    //we found an intron overlap
-    break;
-    }
- if ((i>1 && j>1) || i>imax || j>jmax) {
-     return false; //either no intron overlaps found at all
-                  //or it's not the first intron for at least one of the transcripts
-     }
- if (eistart!=ejstart || eiend!=ejend) return false; //not an exact intron match
- //we have the first matching intron on the left
+bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5diff=false, bool intron_poking=false) {
+	//two transcripts are "intron redundant" iff one transcript's intron chain
+	// is a sub-chain of the other's
+	//no5diff=true : will NOT consider redundant if they have a different first intron at 5'
+	//allowXintron=true : allow a contained transcript to start or end within a container's intron
+	int imax=ti.exons.Count()-1;
+	int jmax=tj.exons.Count()-1;
+	if (imax==0 || jmax==0) return false; //don't deal with single-exon transcripts here
+	if (ti.exons[imax]->start<tj.exons[0]->end ||
+			tj.exons[jmax]->start<ti.exons[0]->end )
+		return false; //intron chains do not overlap at all
 
- if (j>i) {
-   //i==1, ti's start must not conflict with the previous intron of tj
-   if (ti.start<tj.exons[j-1]->start) return false;
-   //so i's first intron starts AFTER j's first intron
-   // then j must contain i, so i's last intron must end with or before j's last intron
-   if (ti.exons[imax]->start>tj.exons[jmax]->start) return false;
-      //comment out the line above if you just want "intron compatibility" (i.e. extension of intron chains )
-   }
-  else if (i>j) {
-   //j==1, tj's start must not conflict with the previous intron of ti
-   if (tj.start<ti.exons[i-1]->start) return false;
-   //so j's intron chain starts AFTER i's
-   // then i must contain j, so j's last intron must end with or before j's last intron
-   if (tj.exons[jmax]->start>ti.exons[imax]->start) return false;
-      //comment out the line above for just "intronCompatible()" check
-   }
- //now check if the rest of the introns overlap, in the same sequence
- int i_start=i; //first (leftmost) matching intron of ti (1-based index)
- int j_start=j; //first (leftmost) matching intron of tj
- i++;
- j++;
- while (i<=imax && j<=jmax) {
-  if (ti.exons[i-1]->end!=tj.exons[j-1]->end ||
-      ti.exons[i]->start!=tj.exons[j]->start) return false;
-  i++;
-  j++;
-  }
- i--;
- j--;
- if (i==imax && j<jmax) {
-   // tj has more introns to the right, check if ti's end doesn't conflict with the current tj exon boundary
-   if (ti.end>tj.exons[j]->end) return false;
-   }
- else if (j==jmax && i<imax) {
-   if (tj.end>ti.exons[i]->end) return false;
-   }
- if (no5share && imax!=jmax) {
-	 //if they share the 5' intron, they are NOT to be considered redundant
-	 if (ti.strand=='+') {
-			 if (i_start==1 && j_start==1) return false;
-	 }
-	 else { //reverse strand
-		 if (i==imax && j==jmax) return false;
-	 }
- }
- return true; //they are intron-redundant
+	uint eistart=0, eiend=0, ejstart=0, ejend=0; //exon boundaries
+	int i=1; //exon idx to the right of the current intron of ti
+	int j=1; //exon idx to the right of the current intron of tj
+	//find the first intron overlap:
+	while (i<=imax && j<=jmax) {
+		eistart=ti.exons[i-1]->end;
+		eiend=ti.exons[i]->start;
+		ejstart=tj.exons[j-1]->end;
+		ejend=tj.exons[j]->start;
+		if (ejend<eistart) { j++; continue; }
+		if (eiend<ejstart) { i++; continue; }
+		//we found an intron overlap
+		break;
+	}
+	if (eistart!=ejstart || eiend!=ejend)
+		return false; //first intron overlap is NOT an exact intron match
+
+	if ((i>1 && j>1) //not the first intron for at least one of the transcripts
+			|| i>imax || j>jmax) { //no intron overlap found
+		return false;
+	}
+	//we have the first matching intron on the left
+	if (!intron_poking) {
+		if (j>i //ti starts within tj (ti probably contained within tj)
+				//i==1, ti's start must not conflict with the previous intron of tj
+				&& ti.start<tj.exons[j-1]->start) return false;
+		//or tj contained within ti?
+		if (i>j && tj.start<ti.exons[i-1]->start) return false;
+	}
+	// ---- comment out the next 2 if statements below if just "intron compatibility"
+	//      (i.e. extension of intron chains) is desired
+	if (j>i  //ti starts within tj (ti probably contained within tj)
+		 && // then tj must contain ti, so ti's last intron must end with or before tj's last intron
+		 ti.exons[imax]->start>tj.exons[jmax]->start) return false;
+	if (i>j && tj.exons[jmax]->start>ti.exons[imax]->start) return false;
+	// ----
+
+	//now check if the rest of the introns match in the same sequence
+	int i_start=i; //first (leftmost) matching intron of ti (1-based index)
+	int j_start=j; //first (leftmost) matching intron of tj
+	i++;j++;
+	while (i<=imax && j<=jmax) {
+		if (ti.exons[i-1]->end!=tj.exons[j-1]->end ||
+				ti.exons[i]->start!=tj.exons[j]->start) return false;
+		i++;
+		j++;
+	}
+	i--; j--; //i,j=indexes of last (rightmost) matching intron i_end, j_end
+	if (!intron_poking) { //check for terminal exons of the contained sticking out within a container's intron
+		if (i==imax && j<jmax && //tj has more introns
+			// check if ti's end doesn't conflict with the current tj exon boundary
+			 ti.end>tj.exons[j]->end) return false;
+
+		if (j==jmax && i<imax &&
+			tj.end>ti.exons[i]->end) return false;
+	}
+	if (no5diff && imax!=jmax) { //different number of introns
+		//if they start with a different 5' intron
+		// they are NOT considered redundant
+		if (ti.strand=='+') {
+			if (i_start!=j_start) return false;
+		}
+		else { //reverse strand
+			if (imax-i!=jmax-j) return false;
+		}
+	}
+	return true; //they are intron-redundant
 }
 
 bool t_contains(GffObj& a, GffObj& b) {
@@ -146,7 +148,7 @@ bool t_contains(GffObj& a, GffObj& b) {
   else return false;
  }
 
-int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false) {
+int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false, bool intron_poking=false) {
  //first locate the list index of the mrna starting just ABOVE
  //the end of this mrna
  if (mrnas->Count()==0) return -1;
@@ -160,8 +162,8 @@ int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false) {
           continue;
           }
      if (omrna.start>m->end) continue; //this should never be the case if nidx was found correctly
-     
-     if (intronRedundant(*m, omrna, no5share)) return i;
+     //FIXME : what about single-exon transcript redundancy ? probably not needed within a sample
+     if (intronRedundant(*m, omrna, no5share, intron_poking)) return i;
      }
  return -1;
 }
@@ -190,7 +192,7 @@ int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
 				 bool is_ref_set,
 				 int check_for_dups,
-				 int qfidx, bool only_multiexon) {
+				 int qfidx, bool only_multiexon, bool intron_poking, bool keep_dups) {
 	int tredundant=0; //redundant transcripts discarded
 	int total_kept=0;
 	int total_seen=mrnas.Count();
@@ -229,12 +231,11 @@ int parse_mRNAs(GfList& mrnas,
 			gdata=new GSeqData(m->gseq_id);
 			glstdata.Add(gdata);
 			}
-		
+
 		double fpkm=0;
 		double cov=0;
-		double conf_hi=0;
-		double conf_lo=0;
-
+		double tpm=0;
+		GffObj* dup_by=NULL;
 		GList<GffObj>* target_mrnas=NULL;
 		if (is_ref_set) { //-- ref transcripts
 		   if (m->strand=='.') {
@@ -279,46 +280,56 @@ int parse_mRNAs(GfList& mrnas,
 		   total_kept++;
 		   if (check_for_dups) { //check for redundancy
 		     // check if there is a redundancy between this and another already loaded Cufflinks transcript
-		     int cidx =  is_Redundant(m, target_mrnas, (check_for_dups>1));
-		     if (cidx>=0) {
+		     int cidx =  is_Redundant(m, target_mrnas, (check_for_dups>1), intron_poking);
+		     if (cidx>=0) { //found a redundant transcript
 		        //always discard the redundant transcript with the fewer exons OR shorter
 			     tredundant++;
 		         total_kept--;
 		    	 if (t_dominates(target_mrnas->Get(cidx),m)) {
 		            //new transcript is shorter, discard it
-		        	if (gtf_tracking_verbose) {
-		        		GMessage(" transfrag %s discarded (made redundant by %s)\n", m->getID(), target_mrnas->Get(cidx)->getID());
-		        	}
-		            continue;
+		        	//if (gtf_tracking_verbose) {
+		        	//	GMessage(" transfrag %s discarded (made redundant by %s)\n", m->getID(), target_mrnas->Get(cidx)->getID());
+		        	//}
+		            if (keep_dups) {
+		            	dup_by=target_mrnas->Get(cidx);
+		            }
+		            else continue;
 		        }
 		        else {
 		            //discard the older transfrag
-		        	if (gtf_tracking_verbose) {
-		        		GMessage(" transfrag %s discarded (made redundant by %s)\n", target_mrnas->Get(cidx)->getID(), m->getID());
+		        	//if (gtf_tracking_verbose) {
+		        	//	GMessage(" transfrag %s discarded (made redundant by %s)\n", target_mrnas->Get(cidx)->getID(), m->getID());
+		        	//}
+		        	if (keep_dups) {
+		        		((CTData*)(target_mrnas->Get(cidx)->uptr))->dup_of=m;
 		        	}
-		            ((CTData*)(target_mrnas->Get(cidx)->uptr))->mrna=NULL;
-		            target_mrnas->Get(cidx)->isUsed(false);
-		            target_mrnas->Forget(cidx);
-		            target_mrnas->Delete(cidx);
+		        	else {
+		              ((CTData*)(target_mrnas->Get(cidx)->uptr))->mrna=NULL;
+		              target_mrnas->Get(cidx)->isUsed(false);
+		              target_mrnas->Forget(cidx);
+		              target_mrnas->Delete(cidx);
+		        	}
 		            //the uptr (CTData) pointer will still be kept in gdata->ctdata and deallocated eventually
 		        }
 		     }
 		   }// redundant transfrag check
-		   if (m->gscore==0.0)   
+		   if (m->gscore==0.0)
 		     m->gscore=m->exons[0]->score; //Cufflinks exon score = isoform abundance
-		   //const char* expr = (gtf_tracking_largeScale) ? m->getAttr("FPKM") : m->exons[0]->getAttr(m->names,"FPKM");
+
+
 		   const char* expr = m->getAttr("FPKM");
 		   if (expr!=NULL) {
 		       if (expr[0]=='"') expr++;
 		       fpkm=strtod(expr, NULL);
-		       } else { //backward compatibility: read RPKM if FPKM not found
+		       }
+		   /* else { //backward compatibility: read RPKM if FPKM not found
 		       //expr=(gtf_tracking_largeScale) ? m->getAttr("RPKM") : m->exons[0]->getAttr(m->names,"RPKM");
 		       expr=m->getAttr("RPKM");
 		       if (expr!=NULL) {
 		           if (expr[0]=='"') expr++;
 		           fpkm=strtod(expr, NULL);
 		           }
-		       }
+		       } */
 		   //const char* scov=(gtf_tracking_largeScale) ? m->getAttr("cov") : m->exons[0]->getAttr(m->names,"cov");
 		   const char* scov=m->getAttr("cov");
 		   if (scov!=NULL) {
@@ -326,29 +337,33 @@ int parse_mRNAs(GfList& mrnas,
 		       cov=strtod(scov, NULL);
 		       }
 		   //const char* sconf_hi=(gtf_tracking_largeScale) ? m->getAttr("conf_hi") : m->exons[0]->getAttr(m->names,"conf_hi");
-		   const char* sconf_hi=m->getAttr("conf_hi");
-		   if (sconf_hi!=NULL){
-		       if (sconf_hi[0]=='"') sconf_hi++;
-		       conf_hi=strtod(sconf_hi, NULL);
+		   const char* stpm=m->getAttr("TPM");
+		   if (stpm!=NULL){
+		       if (stpm[0]=='"') stpm++;
+		       tpm=strtod(stpm, NULL);
 		       }
+		   /*
 		   //const char* sconf_lo=(gtf_tracking_largeScale) ? m->getAttr("conf_lo") : m->exons[0]->getAttr(m->names,"conf_lo");
 		   const char* sconf_lo=m->getAttr("conf_lo");
 		   if (sconf_lo!=NULL) {
 		       if (sconf_lo[0]=='"') sconf_lo++;
 		       conf_lo=strtod(sconf_lo, NULL);
 		       }
-		   } //Cufflinks transfrags
+		   */
+		   } //query transfrags redundancy check
 		target_mrnas->Add(m);
 		m->isUsed(true);
 		CTData* mdata=new CTData(m);
 		mdata->qset=qfidx;
 		gdata->tdata.Add(mdata);
 		if (!is_ref_set) {
-		// Cufflinks - attributes parsing
+		   mdata->dup_of=dup_by;
+		//  StringTie attributes parsing
 		   mdata->FPKM=fpkm;
 		   mdata->cov=cov;
-		   mdata->conf_hi=conf_hi;
-		   mdata->conf_lo=conf_lo;
+		   mdata->TPM=tpm;
+		   //mdata->conf_lo=conf_lo;
+
 		   }
 	}//for each mrna read
 	if (gtf_tracking_verbose) {
@@ -357,10 +372,6 @@ int parse_mRNAs(GfList& mrnas,
 		else
 	   GMessage(" Kept %d transfrags out of %d\n", total_kept, total_seen);
 	}
- //if (mrna_deleted>0)
- //  mrnas.Pack();
- 
- //return (is_ref_set ? refdiscarded : tredundant);
 	return tredundant;
 }
 
@@ -605,7 +616,8 @@ void sort_GSeqs_byName(GList<GSeqData>& seqdata) {
 }
 
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
-	         int check_for_dups, int qfidx, const char* fname, bool only_multiexon) {
+	         int check_for_dups, int qfidx, const char* fname, bool only_multiexon,
+			 bool intron_poking, bool keep_dups) {
 	//>>>>> read all transcripts/features from a GTF/GFF3 file
 	//int imrna_counter=0;
 #ifdef HEAPROFILE
@@ -625,15 +637,17 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_readAll");
 #endif
-
-	int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, check_for_dups, qfidx,only_multiexon);
+    //int qtcount=gffr->gflst.Count();
+    if (!isRefData && gtf_tracking_verbose)
+    	GMessage("  %d query transcripts found.\n");
+    int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, check_for_dups, qfidx,only_multiexon, intron_poking, keep_dups);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_parse_mRNAs");
 #endif
 	if (gtf_tracking_verbose && d>0) {
 	  if (isRefData) GMessage(" %d duplicate reference transcripts discarded.\n",d);
-	            else GMessage(" %d redundant query transfrags discarded.\n",d);
+	            else GMessage(" %d redundant query transfrags detected (to be discarded).\n",d);
 	  }
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs

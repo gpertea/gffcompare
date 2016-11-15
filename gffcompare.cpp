@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.9.8"
+#define VERSION "0.9.9"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -48,12 +48,16 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     <outprefix>.combined.gtf file (default: 'TCONS')\n\
  -C discard the \"contained\" transcripts in the .combined.gtf\n\
     (i.e. collapse intron-redundant transcripts across all query files)\n\
- -E discard \"contained\" transfrags which are intron compatible with larger\n\
-    transfrags (discard intron-redundant transfrags within a query file)\n\
- -F discard intron-redundant transfrags unless they only differ at the 3' end\n\
-    and share the 5' end (within the same query file)\n\
+ -E when loading a query/sample, discard \"contained\" transfrags which\n\
+    are intron compatible with larger transfrags in the same query/sample\n\
+ -F like -E, but do not discard intron-redundant transfrags if they start \n\
+    with a different 5' intron (keep potentially alternate TSS)\n\
+ -X discard contained transfrags even when their terminal exons extend into\n\
+    the container's introns (forces -C and -E)\n\
+ -K for -C/-E/-F/-X, do NOT discard transfrags matching a reference\n\
  -T do not generate .tmap and .refmap files for each input file\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
+ \n\
  -D (debug mode) enables -V and generates additional files: \n\
     <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
 "
@@ -61,8 +65,9 @@ bool debug=false;
 bool perContigStats=false; // -S to enable stats for every single contig
 //bool generic_GFF=false;
 //true if -G: won't discard intron-redundant transfrags
-
 bool showContained=false; // -C
+bool keepRefMatching=false; //-K with -C/-E/-F/-X
+bool allowIntronSticking=false; //-X option
 bool reduceRefs=false; //-R
 bool reduceQrys=false; //-Q
 bool checkFasta=false;
@@ -185,7 +190,7 @@ int main(int argc, char * const argv[]) {
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "version;help;vCDTGMNVEFSKQRLXhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv, "version;help;vCDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -200,13 +205,12 @@ int main(int argc, char * const argv[]) {
     show_version();
     exit(0);
   }
-  showContained=(args.getOpt('C')==NULL);
   debug=(args.getOpt('D')!=NULL);
   tmapFiles=(args.getOpt('T')==NULL);
   multiexon_only=(args.getOpt('M')!=NULL);
   multiexonrefs_only=(args.getOpt('N')!=NULL);
   perContigStats=(args.getOpt('S')!=NULL);
-  checkFasta=(args.getOpt('K')!=NULL);
+  checkFasta=(args.getOpt('J')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
   FILE* finlst=NULL;
   GStr s=args.getOpt('i');
@@ -281,9 +285,25 @@ int main(int argc, char * const argv[]) {
     }
   int discard_redundant=0; //default: do not discard intron-redundant (contained) query transcripts
 
-  if (args.getOpt('E')) discard_redundant=1; //discard "redundant" query transcripts
+  showContained=(args.getOpt('C')==NULL); //true if -C NOT given
+  //so showContained is now true by default, all contained transfrags will be printed
+  //in the combined.gtf file, but those contained will have a "contained_in" attribute
+  if (args.getOpt('E'))
+	   discard_redundant=1; //discard "redundant" query transcripts
   if (args.getOpt('F'))
-    discard_redundant=2; // discard redundant qry transcripts unless they start with the same 5' intron
+    discard_redundant=2; // discard redundant qry transcripts if they don't share
+      // the same 5' intron (but match the rest of the introns)
+  if (args.getOpt('X')) {
+	if (discard_redundant==2)
+		GMessage("Warning: -F option superseded by -X\n");
+	discard_redundant=1;
+	showContained=false;
+  }
+  keepRefMatching=(args.getOpt('K')!=NULL);
+  if (keepRefMatching && discard_redundant==0 && showContained) {
+	  GMessage("Warning: -K option ignored, only makes sense with -C/-E/-F/-X");
+	  keepRefMatching=false;
+  }
   //if a full pathname is given
   //the other common output files will still be created in the current directory:
   // .loci, .tracking, .stats
@@ -391,8 +411,14 @@ int main(int argc, char * const argv[]) {
 
       GList<GSeqData>* pdata=new GList<GSeqData>(true,true,true);
       qrysdata[fi]=pdata;
-      //if (gtf_tracking_verbose) GMessage("Loading transcripts from %s..\n",in_file.chars());
-      read_mRNAs(f_in, *pdata, &ref_data, discard_redundant, fi, in_file.chars(), multiexon_only);
+      if (gtf_tracking_verbose)
+    	  GMessage("Loading transcripts from query file: %s..\n",in_file.chars());
+      //int discard_check=discard_redundant;
+      //if (keepRefMatching) {
+      //  discard_check=0;
+      //}
+      read_mRNAs(f_in, *pdata, &ref_data, discard_redundant, fi, in_file.chars(), multiexon_only,
+    		  allowIntronSticking, keepRefMatching);
       GSuperLocus gstats;
       GFaSeqGet *faseq=NULL;
       for (int g=0;g<pdata->Count();g++) { //for each seqdata related to a genomic sequence
@@ -1969,16 +1995,16 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
          mdata=(CTData*)m->uptr;
          if (mdata->qset==lastpq) {
             //shouldn't happen, unless this input set is messed up (has duplicates/redundant transfrags)
-            fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
-               iround(m->gscore/10), mdata->FPKM,mdata->conf_lo,mdata->conf_hi,mdata->cov, m->covlen);
+            fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
+               iround(m->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
             continue;
             }
          for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
              if (ptab>1) fprintf(ft,"\t-");
                     else fprintf(ft,"\t");
          lastpq = mdata->qset;
-         fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-            iround(m->gscore/10), mdata->FPKM,mdata->conf_lo,mdata->conf_hi,mdata->cov, m->covlen);
+         fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
+            iround(m->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
          }
       for (int ptab=qcount-lastpq-1;ptab>0;ptab--)
             fprintf(ft,"\t-");
@@ -1995,8 +2021,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
    for (int ptab=qfidx;ptab>=0;ptab--)
       if (ptab>0) fprintf(ft,"\t-");
              else fprintf(ft,"\t");
-   fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),iround(qt.gscore/10),
-       qtdata->FPKM, qtdata->conf_lo,qtdata->conf_hi,qtdata->cov);
+   fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),iround(qt.gscore/10),
+       qtdata->FPKM, qtdata->TPM, qtdata->cov);
    for (int ptab=qcount-qfidx-1;ptab>0;ptab--)
          fprintf(ft,"\t-");
    fprintf(ft,"\n");
@@ -2258,8 +2284,8 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
                 //fprintf(ftr[q],"%c\t%s\t%d\t%8.6f\t%8.6f\t%d\n", ovlcode, mdata->mrna->getID(),
                 //    iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->cov, mdata->mrna->covlen);
                 const char* mlocname = (mdata->locus!=NULL) ? mdata->locus->mrna_maxcov->getID() : mdata->mrna->getID();
-                fprintf(ftr[q],"%c\t%s\t%s\t%d\t%8.6f\t%8.6f\t%8.6f\t%8.6f\t%d\t%s\t%s\n", mdata->classcode, getGeneID(mdata->mrna), mdata->mrna->getID(),
-                        iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->conf_lo,mdata->conf_hi, mdata->cov, mdata->mrna->covlen, mlocname, ref_match_len);
+                fprintf(ftr[q],"%c\t%s\t%s\t%d\t%8.6f\t%8.6f\t%8.6f\t%d\t%s\t%s\n", mdata->classcode, getGeneID(mdata->mrna), mdata->mrna->getID(),
+                        iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, mdata->mrna->covlen, mlocname, ref_match_len);
             }
         } //for each tdata
     } //for each qdata
