@@ -1303,8 +1303,10 @@ class GXLocus:public GSeg {
       else { //single exon containment testing
              //this is fuzzy and messy (end result may vary depending on the testing order)
              int ovlen=a->exons[0]->overlapLen(b->exons[0]);
-             int minlen=GMIN(a->covlen, b->covlen);
-             if (ovlen>=minlen*0.8) { //if at least 80% of the shorter one is covered, it is contained
+             int lmax=a->covlen;
+             int lmin=b->covlen;
+             if (lmin>lmax) Gswap(lmin,lmax);
+             if (ovlen>=lmax*0.7 || ovlen>=lmin*0.8) { //if at least 80% of the shorter one is covered, it is contained
                 return ((a->covlen>b->covlen) ? 1 : -1);
                 }
               else return 0;

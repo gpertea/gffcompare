@@ -401,9 +401,11 @@ bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
  //if (m.exons.Count()>1 || r.exons.Count()>1..)
  GSeg mseg(m.start, m.end);
  ovlen=mseg.overlapLen(r.start,r.end);
- int lmax=GMAX(r.covlen, m.covlen);
- return ((ovlen >= lmax*0.8) // fuzz matching for single-exon transcripts: 80% of the longer one
-             || (ovlen >= r.covlen*0.9)); // fuzzy reverse-containment - the reference transcript is shorter
+ int lmax=m.covlen;
+ int lmin=r.covlen;
+ if (lmin>lmax) Gswap(lmin,lmax);
+ return ((ovlen >= lmax*0.7) // fuzz matching for single-exon transcripts: 80% of the longer one
+             || (ovlen >= lmin*0.8)); // fuzzy reverse-containment - the reference transcript is shorter
 }
 
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only) {
