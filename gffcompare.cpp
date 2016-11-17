@@ -46,15 +46,13 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
  -p the name prefix to use for consensus transcripts in the \n\
     <outprefix>.combined.gtf file (default: 'TCONS')\n\
- -C discard the \"contained\" transcripts in the .combined.gtf\n\
-    (i.e. collapse intron-redundant transcripts across all query files)\n\
- -E when loading a query/sample, discard \"contained\" transfrags which\n\
-    are intron compatible with larger transfrags in the same query/sample\n\
- -F like -E, but do not discard intron-redundant transfrags if they start \n\
-    with a different 5' intron (keep potentially alternate TSS)\n\
- -X discard contained transfrags even when their terminal exons extend into\n\
-    the container's introns (forces -C and -E)\n\
- -K for -C/-E/-F/-X, do NOT discard transfrags matching a reference\n\
+ -C discard the \"contained\" transfrags in the .combined.gtf\n\
+    (i.e. collapse intron-redundant transfrags across all query files)\n\
+ -A like -C but will not discard intron-redundant transfrags if they start\n\
+    on a different 5' exon (keep alternate TSS)\n\
+ -X like -C but also discard contained transfrags if transfrag ends stick out\n\
+    within the container's introns\n\
+ -K for -C/-A/-X, do NOT discard any redundant transfrag matching a reference\n\
  -T do not generate .tmap and .refmap files for each input file\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
  \n\
@@ -65,8 +63,11 @@ bool debug=false;
 bool perContigStats=false; // -S to enable stats for every single contig
 //bool generic_GFF=false;
 //true if -G: won't discard intron-redundant transfrags
-bool showContained=false; // -C
-bool keepRefMatching=false; //-K with -C/-E/-F/-X
+bool discardRedundant=false; //activated by -C, -A or -X
+//bool showContained=true; // opposite of -C, default is to show them in combined.gtf
+//-- moved to gtf_tracking
+bool keepAltTSS=false; //-A option
+bool keepRefMatching=false; //-K with -C/-A/-X
 bool allowIntronSticking=false; //-X option
 bool reduceRefs=false; //-R
 bool reduceQrys=false; //-Q
@@ -75,6 +76,8 @@ bool tmapFiles=true;
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
+GStr consGTF;
+int outConsCount=0;
 int polyrun_range=2000; //polymerase run range 2KB
 double scoreThreshold=0;
 char* cprefix=NULL;
@@ -113,19 +116,22 @@ class GSeqTrack {
   GList<GXLocus> xloci_f; // extended super-loci across all qry datasets
   GList<GXLocus> xloci_r; // extended super-loci across all qry datasets
   GList<GXLocus> xloci_u; // extended super-loci across all qry datasets
-  GSeqData* qdata[MAX_QFILES]; //fixed order array with GSeqData for each qry input
+  GVec<GSeqData*> qdata; //fixed order array with GSeqData for each qry input
                  //element in array is NULL if a qry file has no transcripts on this genomic sequence
   int get_gseqid() { return gseq_id; }
-  GSeqTrack(int gid=-1):xloci_f(true,true,false),
-        xloci_r(true,true,false), xloci_u(true,true,false) {
+
+  GSeqTrack(int numqryfiles, int gid):xloci_f(true,true,false),
+        xloci_r(true,true,false), xloci_u(true,true,false), qdata() {
     gseq_id=gid;
     if (gseq_id>=0) {
       gseq_name=GffObj::names->gseqs.getName(gseq_id);
       }
     rloci_f=NULL;
     rloci_r=NULL;
-    for (int i=0;i<MAX_QFILES;i++) qdata[i]=NULL;
+    //for (int i=0;i<MAX_QFILES;i++) qdata[i]=NULL;
+    qdata.Resize(numqryfiles, NULL);
     }
+
   bool operator==(GSeqTrack& d){
       return (gseq_id==d.gseq_id);
       }
@@ -190,7 +196,7 @@ int main(int argc, char * const argv[]) {
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "version;help;vCDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv, "version;help;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -222,7 +228,7 @@ int main(int argc, char * const argv[]) {
 		  if (finlst==NULL) GError("Error opening file: %s\n", s.chars());
 	  }
   }
-  int numqryfiles=0;
+
   if (finlst) {
 	  GLineReader* lr=new GLineReader(finlst);
 	  char* l=NULL;
@@ -236,10 +242,10 @@ int main(int argc, char * const argv[]) {
 	  gtf_tracking_largeScale=true;
   }
   else {
-	  numqryfiles=args.startNonOpt();
+	  numQryFiles=args.startNonOpt();
 	  char *infile=NULL;
-	  if (numqryfiles>0) {
-		  if (numqryfiles>6)
+	  if (numQryFiles>0) {
+		  if (numQryFiles>6)
 			  gtf_tracking_largeScale=true;
 		  while ((infile=args.nextNonOpt())!=NULL) {
 			  if (!fileExists(infile)) GError("Error: cannot locate input file: %s\n", infile);
@@ -247,16 +253,18 @@ int main(int argc, char * const argv[]) {
 		  } //for each argument
 	  }
   }
-  numqryfiles=qryfiles.Count();
-  if (numqryfiles==0) {
+  numQryFiles=qryfiles.Count();
+  if (numQryFiles==0) {
 	  show_usage();
 	  exit(1);
   }
+  /*
   if (numqryfiles>MAX_QFILES) {
 	  GMessage("Error: too many input files (limit set to %d at compile time)\n",MAX_QFILES);
 	  GMessage("(if you need to raise this limit set a new value for\nMAX_QFILES in gtf_tracking.h and recompile)\n");
 	  exit(0x5000);
   }
+  */
   gfasta.init(args.getOpt('s'));
    // determine if -s points to a multi-fasta file or a directory
   //s=args.getOpt('c');
@@ -283,25 +291,33 @@ int main(int argc, char * const argv[]) {
     reduceQrys=(args.getOpt('Q')!=NULL);
     //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
     }
-  int discard_redundant=0; //default: do not discard intron-redundant (contained) query transcripts
+  //int discard_redundant=0; //default: do not discard intron-redundant (contained) query transcripts
 
-  showContained=(args.getOpt('C')==NULL); //true if -C NOT given
+  //showContained=(args.getOpt('C')==NULL); //true if -C NOT given
   //so showContained is now true by default, all contained transfrags will be printed
   //in the combined.gtf file, but those contained will have a "contained_in" attribute
-  if (args.getOpt('E'))
+  /*
+   if (args.getOpt('E'))
 	   discard_redundant=1; //discard "redundant" query transcripts
   if (args.getOpt('F'))
-    discard_redundant=2; // discard redundant qry transcripts if they don't share
-      // the same 5' intron (but match the rest of the introns)
+    discard_redundant=2; // discard redundant qry transcripts only if they share
+      // the same 5' intron
+  */
+  if (args.getOpt('C')) discardRedundant=true;
+  if (args.getOpt('A')) {
+	  //redundancy check will NOT consider containment for alt. TSS
+	  keepAltTSS=true;
+	  if (discardRedundant)
+		   GMessage("Warning: option -C will be ignored, -A takes precedence.\n");
+	  discardRedundant=true;
+  }
   if (args.getOpt('X')) {
-	if (discard_redundant==2)
-		GMessage("Warning: -F option superseded by -X\n");
-	discard_redundant=1;
-	showContained=false;
+	discardRedundant=true;
+	allowIntronSticking=true;
   }
   keepRefMatching=(args.getOpt('K')!=NULL);
-  if (keepRefMatching && discard_redundant==0 && showContained) {
-	  GMessage("Warning: -K option ignored, only makes sense with -C/-E/-F/-X");
+  if (keepRefMatching && !discardRedundant) {
+	  GMessage("Warning: -K option ignored, requires -C, -A or -X\n");
 	  keepRefMatching=false;
   }
   //if a full pathname is given
@@ -361,14 +377,18 @@ int main(int argc, char * const argv[]) {
   GList<GSeqData>** qrysdata=NULL;
   FILE** tfiles=NULL;
   FILE** rtfiles=NULL;
-  GMALLOC(qrysdata, numqryfiles*sizeof(GList<GSeqData>*));
+  GMALLOC(qrysdata, numQryFiles*sizeof(GList<GSeqData>*));
   if (tmapFiles) {
-	  GMALLOC(tfiles, numqryfiles*sizeof(FILE*));
+	  GMALLOC(tfiles, numQryFiles*sizeof(FILE*));
 	  if (haveRefs) {
-		  GMALLOC(rtfiles, numqryfiles*sizeof(FILE*));
+		  GMALLOC(rtfiles, numQryFiles*sizeof(FILE*));
 	  }
   }
-  gffAnnotate=(numqryfiles==1 && discard_redundant==0 && haveRefs);
+  gffAnnotate=(numQryFiles==1 && !discardRedundant && haveRefs);
+  consGTF=outbasename;
+  if (gffAnnotate) consGTF.append(".annotated.gtf");
+              else consGTF.append(".combined.gtf");
+
   for (int fi=0;fi<qryfiles.Count();fi++) {
     GStr in_file(qryfiles[fi]->chars());
     GStr infname(getFileName(qryfiles[fi]->chars())); //file name only
@@ -398,7 +418,7 @@ int main(int argc, char * const argv[]) {
         tfiles[fi]=fopen(s.chars(),"w");
         if (tfiles[fi]==NULL)
           GError("Error creating file '%s'!\n",s.chars());
-        fprintf(tfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_gene_id\tqry_id\tFMI\tFPKM\tFPKM_conf_lo\tFPKM_conf_hi\tcov\tlen\tmajor_iso_id\tref_match_len\n");
+        fprintf(tfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_gene_id\tqry_id\tnum_exons\tFPKM\tTPM\t\tcov\tlen\tmajor_iso_id\tref_match_len\n");
         if (haveRefs) {
           s=sbase;
           s.append(".refmap");
@@ -417,8 +437,7 @@ int main(int argc, char * const argv[]) {
       //if (keepRefMatching) {
       //  discard_check=0;
       //}
-      read_mRNAs(f_in, *pdata, &ref_data, discard_redundant, fi, in_file.chars(), multiexon_only,
-    		  allowIntronSticking, keepRefMatching);
+      read_mRNAs(f_in, *pdata, &ref_data, 0, fi, in_file.chars(), multiexon_only);
       GSuperLocus gstats;
       GFaSeqGet *faseq=NULL;
       for (int g=0;g<pdata->Count();g++) { //for each seqdata related to a genomic sequence
@@ -456,18 +475,21 @@ int main(int argc, char * const argv[]) {
   if (f_mintr!=NULL) fclose(f_mintr);
   if (f_qdisc!=NULL) fclose(f_qdisc);
   gseqtracks.setSorted(&cmpGTrackByName);
-  if (gtf_tracking_verbose)
-	   GMessage("Tracking transcripts across %d query file(s)..\n", numqryfiles);
-  trackGData(numqryfiles, gseqtracks, outbasename, tfiles, rtfiles);
+  if (gtf_tracking_verbose && numQryFiles>1)
+	   GMessage("Tracking transcripts across %d query file(s)..\n", numQryFiles);
+  trackGData(numQryFiles, gseqtracks, outbasename, tfiles, rtfiles);
   fprintf(f_out, "\n Total union super-loci across all input datasets: %d \n", xlocnum);
-  if (numqryfiles>1) {
+  if (numQryFiles>1) {
       fprintf(f_out, "  (%d multi-transcript, ~%.1f transcripts per locus)\n",
            total_xloci_alt, ((double)(GXConsensus::count))/xlocnum);
       }
+  int redundant_consensi=GXConsensus::count-outConsCount;
+  fprintf(f_out, "%d out of %d consensus transcripts written in %s (%d discarded as redundant)\n",
+		  outConsCount, GXConsensus::count, consGTF.chars(), redundant_consensi);
   if (gtf_tracking_verbose) GMessage("Cleaning up..\n");
   GFREE(cprefix);
   // clean up
-  for (int i=0;i<numqryfiles;i++) {
+  for (int i=0;i<numQryFiles;i++) {
     delete qrysdata[i];
     }
   GFREE(qrysdata);
@@ -1255,44 +1277,51 @@ void protCluster(GXLocus& xloc, GFaSeqGet *faseq) {
    }
 }
 
-void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, GFaSeqGet *faseq) {
-  for (int l=0;l<xloci.Count();l++) {
-    if (xloci[l]->qloci.Count()==0) continue;
-    GXLocus& xloc=*(xloci[l]);
-    xloc.checkContainment();
-    tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
-    protCluster(xloc,faseq);
-    for (int c=0;c<xloc.tcons.Count();c++) {
-       if (showContained || xloc.tcons[c]->contained==NULL)
-         printConsGTF(fc,xloc.tcons[c],xloc.id);
-       }
-    fprintf(f,"XLOC_%06d\t%s[%c]%d-%d\t", xloc.id,
-        xloc.qloci[0]->mrna_maxcov->getGSeqName(),
-            xloc.strand, xloc.start,xloc.end);
-    //now print all transcripts in this locus, comma delimited
-    //first, ref loci, if any
-    int printfd=0;
-    if (xloc.rloci.Count()>0) {
-       for (int i=0;i<xloc.rloci.Count();i++) {
-          for (int j=0;j<xloc.rloci[i]->mrnas.Count();j++) {
-            if (printfd==0) fprintf(f,"%s|%s",getGeneID(xloc.rloci[i]->mrnas[j]),
-                                                    xloc.rloci[i]->mrnas[j]->getID());
-                else fprintf(f,",%s|%s",getGeneID(xloc.rloci[i]->mrnas[j]),
-                                                    xloc.rloci[i]->mrnas[j]->getID());
-            printfd++;
-            }
-          }
-       }
-    else {
-      fprintf(f,"-");
-      }
-   //second, all the query transcripts
-    for (int qi=0;qi<qcount;qi++) {
-       fprintf(f,"\t");
-       printXQ1(f,qi,xloc.qloci);
-       }
-    fprintf(f,"\n");
-    }
+void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, GFaSeqGet *faseq, FILE* fr=NULL) {
+	for (int l=0;l<xloci.Count();l++) {
+		if (xloci[l]->qloci.Count()==0) continue;
+		GXLocus& xloc=*(xloci[l]);
+		xloc.checkContainment(keepAltTSS, allowIntronSticking);
+		tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
+		protCluster(xloc,faseq);
+		for (int c=0;c<xloc.tcons.Count();c++) {
+			if (discardRedundant && xloc.tcons[c]->contained!=NULL) {
+				if (!(keepRefMatching && xloc.tcons[c]->refcode=='='))
+				{
+					if (fr) printConsGTF(fr, xloc.tcons[c], xloc.id);
+					continue;
+				}
+			}
+			printConsGTF(fc,xloc.tcons[c],xloc.id);
+			++outConsCount;
+		}
+		fprintf(f,"XLOC_%06d\t%s[%c]%d-%d\t", xloc.id,
+				xloc.qloci[0]->mrna_maxcov->getGSeqName(),
+				xloc.strand, xloc.start,xloc.end);
+		//now print all transcripts in this locus, comma delimited
+		//first, ref loci, if any
+		int printfd=0;
+		if (xloc.rloci.Count()>0) {
+			for (int i=0;i<xloc.rloci.Count();i++) {
+				for (int j=0;j<xloc.rloci[i]->mrnas.Count();j++) {
+					if (printfd==0) fprintf(f,"%s|%s",getGeneID(xloc.rloci[i]->mrnas[j]),
+							xloc.rloci[i]->mrnas[j]->getID());
+					else fprintf(f,",%s|%s",getGeneID(xloc.rloci[i]->mrnas[j]),
+							xloc.rloci[i]->mrnas[j]->getID());
+					printfd++;
+				}
+			}
+		}
+		else {
+			fprintf(f,"-");
+		}
+		//second, all the query transcripts
+		for (int qi=0;qi<qcount;qi++) {
+			fprintf(f,"\t");
+			printXQ1(f,qi,xloc.qloci);
+		}
+		fprintf(f,"\n");
+	}
 }
 
 void writeIntron(FILE* f, char strand, GFaSeqGet* faseq, GSeg& iseg,
@@ -1676,11 +1705,11 @@ void loadRefDescr(const char* fname) {
 }
 
 GSeqTrack* findGSeqTrack(int gsid) {
-  GSeqTrack f(gsid);
+  GSeqTrack f(numQryFiles, gsid);
   int fidx=-1;
   if (gseqtracks.Found(&f,fidx))
      return gseqtracks[fidx];
-  fidx=gseqtracks.Add(new GSeqTrack(gsid));
+  fidx=gseqtracks.Add(new GSeqTrack(numQryFiles, gsid));
   return gseqtracks[fidx];
 }
 
@@ -1688,10 +1717,14 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
  ovlen=0;
  CTData* mdata=((CTData*)m.uptr);
  if (mdata->eqref!=NULL && ((CTData*)(mdata->eqref->uptr))->locus==&rloc) {
-	  mdata->eqref=mdata->ovls.First()->mrna; //this should be unnecessary
-      //check it?
-      return mdata->ovls.First()->mrna;
-      }
+	  if (mdata->eqref!=mdata->ovls.First()->mrna) {
+		  GMessage("Warning: previously matching ref (%s) not the best overlap for %s (which is %s)\n",
+				  mdata->eqref->getID(), m.getID(), mdata->ovls.First()->mrna->getID());
+		  mdata->eqref=mdata->ovls.First()->mrna;
+	  }
+
+      return mdata->eqref;
+ }
  //if (rloc==NULL|| m==NULL) return NULL;
  GffObj* ret=NULL;
  for (int r=0;r<rloc.mrnas.Count();r++) {
@@ -1996,7 +2029,9 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
          if (mdata->qset==lastpq) {
             //shouldn't happen, unless this input set is messed up (has duplicates/redundant transfrags)
             fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
-               iround(m->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+               //iround(m->gscore/10),
+            		m->exons.Count(),
+            		mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
             continue;
             }
          for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
@@ -2004,7 +2039,9 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
                     else fprintf(ft,"\t");
          lastpq = mdata->qset;
          fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-            iround(m->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+            //iround(m->gscore/10),
+        		 m->exons.Count(),
+			mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
          }
       for (int ptab=qcount-lastpq-1;ptab>0;ptab--)
             fprintf(ft,"\t-");
@@ -2021,7 +2058,9 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
    for (int ptab=qfidx;ptab>=0;ptab--)
       if (ptab>0) fprintf(ft,"\t-");
              else fprintf(ft,"\t");
-   fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),iround(qt.gscore/10),
+   fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),
+		   //iround(qt.gscore/10),
+		   qt.exons.Count(),
        qtdata->FPKM, qtdata->TPM, qtdata->cov);
    for (int ptab=qcount-qfidx-1;ptab>0;ptab--)
          fprintf(ft,"\t-");
@@ -2050,18 +2089,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
                  }
            } else rmatch=qtdata->eqref;
        if (rmatch!=NULL) {
-         /*
-          GffObj* m=loctrack[q]->Get(qi);
-          //traverse linked list of matching transcripts
-          while (((CTData*)m->uptr)->eqnext!=NULL) {
-            m=((CTData*)m->uptr)->eqnext;
-            if (rmatch!=NULL) {
-              ((CTData*)m->uptr)->addOvl('=',rmatch,rovlen);
-              }
-            } //traverse qry data sets
-          continue;
-          }
-         */
+    	   //assign the same refmatch to all
           for (int k=0;k<qtdata->eqlist->Count();k++) {
             GffObj* m=qtdata->eqlist->Get(k);
             ((CTData*)m->uptr)->addOvl('=',rmatch,rovlen);
@@ -2285,7 +2313,9 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
                 //    iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->cov, mdata->mrna->covlen);
                 const char* mlocname = (mdata->locus!=NULL) ? mdata->locus->mrna_maxcov->getID() : mdata->mrna->getID();
                 fprintf(ftr[q],"%c\t%s\t%s\t%d\t%8.6f\t%8.6f\t%8.6f\t%d\t%s\t%s\n", mdata->classcode, getGeneID(mdata->mrna), mdata->mrna->getID(),
-                        iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->TPM, mdata->cov, mdata->mrna->covlen, mlocname, ref_match_len);
+                        //iround(mdata->mrna->gscore/10),
+                		mdata->mrna->exons.Count(),
+						mdata->FPKM, mdata->TPM, mdata->cov, mdata->mrna->covlen, mlocname, ref_match_len);
             }
         } //for each tdata
     } //for each qdata
@@ -2372,7 +2402,7 @@ void buildXLoci(GTrackLocus& loctrack, int qcount, GSeqTrack& gtrack, char stran
 void singleQData(GList<GLocus>& qloci, GList<GTrackLocus>& loctracks) {
  for (int i=0;i<qloci.Count();i++) {
   if (qloci[i]->t_ptr==NULL) {
-    GTrackLocus* tloc=new GTrackLocus();
+    GTrackLocus* tloc=new GTrackLocus(numQryFiles);
     tloc->addQLocus(qloci[i],0);
     loctracks.Add(tloc);
     }
@@ -2518,7 +2548,7 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
          } //for each existing Xlocus
       if (xfound==0) {
          if (!refcheck) //we really don't care about ref-only clusters
-           loctracks.Add(new GTrackLocus(loc));
+           loctracks.Add(new GTrackLocus(numQryFiles, loc));
          }
       else {
          int il=mrgloctracks[0];
@@ -2624,13 +2654,15 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
     f_itrack=fopen(s.chars(),"w");
     if (f_itrack==NULL) GError("Error creating file %s !\n",s.chars());
   //  }
-  s=fbasename;
-  if (gffAnnotate) s.append(".annotated.gtf");
-              else s.append(".combined.gtf");
-
-  f_ctrack=fopen(s.chars(),"w");
+  f_ctrack=fopen(consGTF.chars(),"w");
   if (f_ctrack==NULL) GError("Error creating file %s !\n",s.chars());
 
+  FILE* fredundant=NULL;
+  if (discardRedundant) {
+	  s=fbasename;
+	  s.append(".redundant.gtf");
+	  fredundant=fopen(s.chars(),"w");
+  }
   s=fbasename;
   s.append(".loci");
   f_xloci=fopen(s.chars(),"w");
@@ -2663,9 +2695,9 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
          }
     //print XLoci and XConsensi within each xlocus
     //also TSS clustering and protein ID assignment for XConsensi
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, faseq);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, faseq);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, faseq);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, faseq, fredundant);
     if (tmapFiles && haveRefs) {
       printRefMap(frs, qcount, gseqtrack.rloci_f);
       printRefMap(frs, qcount, gseqtrack.rloci_r);

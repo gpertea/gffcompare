@@ -14,8 +14,8 @@
 #include "GFastaIndex.h"
 #include "GStr.h"
 
-#define MAX_QFILES 500
-
+//#define MAX_QFILES 10000
+extern int numQryFiles;
 extern bool gtf_tracking_verbose;
 
 extern bool gtf_tracking_largeScale;
@@ -24,7 +24,7 @@ extern bool gtf_tracking_largeScale;
 
 int cmpByPtr(const pointer p1, const pointer p2);
 
-bool t_contains(GffObj& a, GffObj& b); 
+bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking);
 //returns true only IF b has fewer exons than a AND a "contains" b
 
 char* getGSeqName(int gseq_id);
@@ -226,7 +226,7 @@ public:
 	GffObj* mrna; //owner transcript
 	GLocus* locus;
 	GList<COvLink> ovls; //overlaps with other transcripts (ref vs query)
-	GffObj* dup_of; //redundant transfrag superseded by dup_of (same query file, same locus)
+	//GffObj* dup_of; //redundant transfrag superseded by dup_of (same query file, same locus)
 	//-- just for ichain match tracking:
 	GffObj* eqref; //ref transcript matching this transcript
 	int qset; //qry set index (qfidx), -1 means reference dataset
@@ -242,7 +242,7 @@ public:
 	//double conf_hi;
 	//double conf_lo;
 	CTData(GffObj* m=NULL, GLocus* l=NULL):mrna(m), locus(l), ovls(true,true,true),
-			    dup_of(NULL), eqref(NULL), qset(-2), eqhead(false), eqlist(NULL),
+			    eqref(NULL), qset(-2), eqhead(false), eqlist(NULL),
 				classcode(0), FPKM(0), TPM(0), cov(0) {
 		if (mrna!=NULL) mrna->uptr=this;
 	}
@@ -354,6 +354,8 @@ public:
 	int flags;
 	GXSeg(uint s=0, uint e=0, int f=0):GSeg(s,e),flags(f) { }
 };
+
+bool intronChainMatch(GffObj &a, GffObj &b);
 
 //Data structure holding a query locus data (overlapping mRNAs on the same strand)
 // and also the accuracy data of all mRNAs of a query locus
@@ -946,12 +948,19 @@ class GTrackLocus:public GSeg {
     bool hasQloci;
     //GLocus* rloc; //corresponding reference locus, if available
     GList<GLocus> rloci; //ref loci found overlapping this region
-    GQCluster* qcls[MAX_QFILES]; //all qloci for this superlocus, grouped by dataset
-    GTrackLocus(GLocus* qloc=NULL, int q=-1):GSeg(0,0),rloci(true,false,true) {
+    GVec<GQCluster*> qcls; //all qloci for this superlocus, grouped by dataset
+    GTrackLocus(int numqryfiles, GLocus* qloc=NULL, int q=-1):GSeg(0,0),rloci(true,false,true),qcls() {
       strand='.';
-      for (int i=0;i<MAX_QFILES;i++) qcls[i]=NULL;
+      if (numqryfiles>0) {
+    	  qcls.Resize(numqryfiles, NULL);
+      }
+      else GError("Error: invalid GTrackLocus constructor called before initializing numQueryFiles.\n");
       if (qloc!=NULL) addQLocus(qloc,q);
       }
+    void init(int num) {
+        //for (int i=0;i<num;i++) qcls.Add(NULL);
+    	qcls.Resize(num, NULL);
+    }
 
     void addRLocus(GLocus* rl) {
       if (rl==NULL) return;
@@ -1055,12 +1064,12 @@ class GTrackLocus:public GSeg {
       }
      */
     ~GTrackLocus() {
-      for (int q=0;q<MAX_QFILES;q++)
+      for (int q=0;q<numQryFiles;q++)
            if (qcls[q]!=NULL) { delete qcls[q]; qcls[q]=NULL; }
       }
 
     GQCluster* operator[](int q) {
-      if (q<0 || q>=MAX_QFILES)
+      if (q<0 || q>=numQryFiles)
           GError("Error: qfidx index out of bounds (%d) for GTrackLocus!\n",q);
       return qcls[q];
       }
@@ -1102,6 +1111,7 @@ class GXConsensus:public GSeg {
      }
 };
 
+//cross sample and reference superlocus data structure
 class GXLocus:public GSeg {
  public:
     int id;
@@ -1251,13 +1261,13 @@ class GXLocus:public GSeg {
   } //::addMerge()
 
 
- void checkContainment() {
+ void checkContainment(bool keepAlt5=false, bool intron_poking=false) {
    //checking containment
   for (int j=0;j<tcons.Count()-1;j++) {
     GXConsensus* t=tcons[j];
     for (int i=j+1;i<tcons.Count();i++) {
-       if (tcons[i]->contained!=NULL && t->tcons->exons.Count()>1) continue; //will check the container later anyway
-       int c_status=checkXConsContain(t->tcons, tcons[i]->tcons);
+       //if (tcons[i]->contained!=NULL && t->tcons->exons.Count()>1) continue; //will check the container later anyway
+       int c_status=checkXConsContain(t->tcons, tcons[i]->tcons, keepAlt5, intron_poking);
        if (c_status==0) continue; //no containment relationship between t and tcons[i]
        if (c_status>0) { //t is a container for tcons[i]
             tcons[i]->contained=t;
@@ -1269,16 +1279,28 @@ class GXLocus:public GSeg {
        }
    }
   }
- 
- int checkXConsContain(GffObj* a, GffObj* b) {
+
+ int checkXConsContain(GffObj* a, GffObj* b, bool keepAltTSS, bool intron_poking) {
   // returns  1 if a is the container of b
   //         -1 if a is contained in b
   //          0 if no 
   if (a->end<b->start || b->end<a->start) return 0;
   if (a->exons.Count()==b->exons.Count()) {
-     if (a->exons.Count()>1) return 0; //same number of exons - no containment possible
-                                       //because equivalence was already tested
-           else { //single exon containment testing
+      if (a->exons.Count()>1) {
+    	  if (((CTData*)a->uptr)->qset!=((CTData*)b->uptr)->qset)
+    	     return 0; //different sample, same number of exons - no containment possible
+    	               //because equivalence was already tested across samples
+    	  if (intronChainMatch(*a, *b)) {
+        	 //if matched choose one to be the "container"
+        	 //TODO: ideally we should choose one
+        	 //    a) the one better represented across multiple samples
+        	 //       OR
+        	 //    b) the one with a closer match of terminal exons to a reference transcript
+        	 // for now we choose the longest one (which might not be the "right one")
+    		 return ((a->covlen > b->covlen) ? 1 : -1) ;
+    		 }
+    	  }
+      else { //single exon containment testing
              //this is fuzzy and messy (end result may vary depending on the testing order)
              int ovlen=a->exons[0]->overlapLen(b->exons[0]);
              int minlen=GMIN(a->covlen, b->covlen);
@@ -1286,21 +1308,18 @@ class GXLocus:public GSeg {
                 return ((a->covlen>b->covlen) ? 1 : -1);
                 }
               else return 0;
-             //if (a->start<=b->start+10 && a->end+10>=b->end) return 1;
-             //  else { if (b->start<=a->start+10 && b->end+10>=a->end) return -1;
-             //          else return 0; 
-             //}
-             }
+           }
      }
    //different number of exons:
-   if (a->exons.Count()>b->exons.Count()) return t_contains(*a, *b) ? 1:0;
-                     else return t_contains(*b, *a) ? -1 : 0;
+   if (a->exons.Count()>b->exons.Count())
+	    return t_contains(*a, *b, keepAltTSS, intron_poking) ?  1 : 0;
+   else return t_contains(*b, *a, keepAltTSS, intron_poking) ? -1 : 0;
   }
-  
+
  void addXCons(GXConsensus* t) {
   tcons.Add(t);
   }
-  
+
 }; //GXLocus
 
 
@@ -1309,12 +1328,12 @@ int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
 				 bool is_ref_set=true,
 				 int check_for_dups=0,
-				 int qfidx=-1, bool only_multiexon=false, bool intron_poking=false, bool keep_dups=false);
+				 int qfidx=-1, bool only_multiexon=false);
 
 //reading a mRNAs from a gff file and grouping them into loci
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data=NULL, 
               int check_for_dups=0, int qfidx=-1, const char* fname=NULL,
-              bool only_multiexon=false, bool intron_poking=false, bool keep_dups=false);
+              bool only_multiexon=false);
 
 void read_transcripts(FILE* f, GList<GSeqData>& seqdata, 
 #ifdef CUFFLINKS

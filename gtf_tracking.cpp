@@ -2,6 +2,7 @@
 
 bool gtf_tracking_verbose = false;
 bool gtf_tracking_largeScale=false; //many input Cufflinks files processed at once by cuffcompare, discard exon attributes
+int numQryFiles=0;
 
 int GXConsensus::count=0;
 
@@ -48,6 +49,19 @@ GffObj* is_RefDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx) {
   return NULL;
 }
 
+
+bool intronChainMatch(GffObj&a, GffObj&b) {
+	if (a.exons.Count()!=b.exons.Count()) return false;
+	if (a.exons.Count()<2) return false;
+ 	for (int i=1;i<a.exons.Count();i++) {
+ 		//if (i<imax) ovlen+=a.exons[i]->len();
+ 		if ((a.exons[i-1]->end!=b.exons[i-1]->end) ||
+ 				(a.exons[i]->start!=b.exons[i]->start)) {
+ 			return false; //intron mismatch
+ 		}
+ 	}
+ 	return true;
+}
 
 bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5diff=false, bool intron_poking=false) {
 	//two transcripts are "intron redundant" iff one transcript's intron chain
@@ -130,7 +144,8 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5diff=false, bool intron_po
 	return true; //they are intron-redundant
 }
 
-bool t_contains(GffObj& a, GffObj& b) {
+
+bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking) {
  //returns true if b's intron chain (or single exon) is included in a
  if (b.exons.Count()>=a.exons.Count()) return false;
  if (b.exons.Count()==1) {
@@ -140,13 +155,16 @@ bool t_contains(GffObj& a, GffObj& b) {
        }
     return false;
     }
- if (intronRedundant(a,b)) {
-    //intronRedudant allows b's initial/terminal exons to extend beyond a's boundaries
-    //but we don't allow this kind of behavior here
-    return (b.start>=a.start && b.end<=a.end);
+
+ if (intronRedundant(a, b, keepAltTSS, intron_poking)) {
+     //intronRedudant allows b's initial/terminal exons to extend beyond a's boundaries
+     //but we don't allow this here *unless* user already relaxed the redundancy conditions!
+     if (intron_poking) return true;
+     else return (b.start>=a.start && b.end<=a.end);
     }
   else return false;
  }
+
 
 int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false, bool intron_poking=false) {
  //first locate the list index of the mrna starting just ABOVE
@@ -190,9 +208,8 @@ bool betterDupRef(GffObj* a, GffObj* b) {
 
 int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
-				 bool is_ref_set,
-				 int check_for_dups,
-				 int qfidx, bool only_multiexon, bool intron_poking, bool keep_dups) {
+				 bool is_ref_set, int check_for_dups,
+				 int qfidx, bool only_multiexon) {
 	int tredundant=0; //redundant transcripts discarded
 	int total_kept=0;
 	int total_seen=mrnas.Count();
@@ -235,7 +252,7 @@ int parse_mRNAs(GfList& mrnas,
 		double fpkm=0;
 		double cov=0;
 		double tpm=0;
-		GffObj* dup_by=NULL;
+		//GffObj* dup_by=NULL;
 		GList<GffObj>* target_mrnas=NULL;
 		if (is_ref_set) { //-- ref transcripts
 		   if (m->strand=='.') {
@@ -278,6 +295,7 @@ int parse_mRNAs(GfList& mrnas,
 		     else if (m->strand=='-') { target_mrnas=&(gdata->mrnas_r); }
 		        else { m->strand='.'; target_mrnas=&(gdata->umrnas); }
 		   total_kept++;
+		   /* never discard sample transfrags, will check for redundancy at the end
 		   if (check_for_dups) { //check for redundancy
 		     // check if there is a redundancy between this and another already loaded Cufflinks transcript
 		     int cidx =  is_Redundant(m, target_mrnas, (check_for_dups>1), intron_poking);
@@ -313,6 +331,7 @@ int parse_mRNAs(GfList& mrnas,
 		        }
 		     }
 		   }// redundant transfrag check
+		   */
 		   if (m->gscore==0.0)
 		     m->gscore=m->exons[0]->score; //Cufflinks exon score = isoform abundance
 
@@ -357,20 +376,23 @@ int parse_mRNAs(GfList& mrnas,
 		mdata->qset=qfidx;
 		gdata->tdata.Add(mdata);
 		if (!is_ref_set) {
-		   mdata->dup_of=dup_by;
+		   //mdata->dup_of=dup_by;
 		//  StringTie attributes parsing
 		   mdata->FPKM=fpkm;
 		   mdata->cov=cov;
 		   mdata->TPM=tpm;
 		   //mdata->conf_lo=conf_lo;
-
 		   }
 	}//for each mrna read
-	if (gtf_tracking_verbose) {
-		if (is_ref_set)
-       GMessage(" Kept %d ref transcripts out of %d\n", total_kept, total_seen);
-		else
-	   GMessage(" Kept %d transfrags out of %d\n", total_kept, total_seen);
+	if (gtf_tracking_verbose && total_kept!=total_seen) {
+		if (is_ref_set) {
+          GMessage(" Kept %d ref transcripts out of %d (%d redundant discarded)\n",
+        		   total_kept, total_seen, tredundant);
+		}
+		else {
+	     GMessage(" Kept %d transfrags out of %d (%d redundant discarded)\n",
+	    		 total_kept, total_seen, tredundant);
+		}
 	}
 	return tredundant;
 }
@@ -616,8 +638,8 @@ void sort_GSeqs_byName(GList<GSeqData>& seqdata) {
 }
 
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
-	         int check_for_dups, int qfidx, const char* fname, bool only_multiexon,
-			 bool intron_poking, bool keep_dups) {
+	         int check_for_dups, int qfidx, const char* fname, bool only_multiexon) {
+			 //bool intron_poking, bool keep_dups) {
 	//>>>>> read all transcripts/features from a GTF/GFF3 file
 	//int imrna_counter=0;
 #ifdef HEAPROFILE
@@ -639,8 +661,9 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 #endif
     //int qtcount=gffr->gflst.Count();
     if (!isRefData && gtf_tracking_verbose)
-    	GMessage("  %d query transcripts found.\n");
-    int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, check_for_dups, qfidx,only_multiexon, intron_poking, keep_dups);
+    	GMessage("  %d query transcripts found.\n", gffr->gflst.Count());
+    int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, check_for_dups, qfidx,
+    		             only_multiexon);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_parse_mRNAs");
