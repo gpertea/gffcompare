@@ -1287,9 +1287,11 @@ class GXLocus:public GSeg {
   if (a->end<b->start || b->end<a->start) return 0;
   if (a->exons.Count()==b->exons.Count()) {
       if (a->exons.Count()>1) {
-    	  if (((CTData*)a->uptr)->qset!=((CTData*)b->uptr)->qset)
+    	  /*if (((CTData*)a->uptr)->qset!=((CTData*)b->uptr)->qset)
     	     return 0; //different sample, same number of exons - no containment possible
     	               //because equivalence was already tested across samples
+
+    	  */
     	  if (intronChainMatch(*a, *b)) {
         	 //if matched choose one to be the "container"
         	 //TODO: ideally we should choose one
