@@ -1923,85 +1923,89 @@ int cmpTData_qset(const pointer* p1, const pointer* p2) {
  }
 
 void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
-  for (int i=0;i<mrnas.Count();i++) {
-   GffObj& qt=*(mrnas[i]);
-   CTData* qtdata=(CTData*)qt.uptr;
-   int qfidx=qtdata->qset;
-   char ovlcode=qtdata->classcode;
-   CEqList* eqchain=qtdata->eqlist;
-   GffObj* ref=NULL; //related ref -- it doesn't have to be fully matching
-   //GffObj* eqref=NULL; //fully ichain-matching ref
-   GffObj* tcons=NULL; //"consensus" (largest) transcript for a clique
-   int tmaxcov=0;
-   //eqchain.Add(&qt);
-   //eqref=qtdata->eqref;
-   if (qtdata->ovls.Count()>0 && qtdata->ovls[0]->mrna!=NULL) {
-       //if it has ovlcode with a ref
-       ref=qtdata->ovls[0]->mrna;
-	   //consistency check: qtdata->ovls[0]->code==ovlcode
-	   // -- let tcons be a transfrag, not a ref transcript
-	   //tcons=eqref;
-       //if (tcons!=NULL) tmaxcov=tcons->covlen;
-       }
-   //chain pre-check
-   if (tcons==NULL || mrnas[i]->covlen>tmaxcov) {
-       tcons=mrnas[i];
-       tmaxcov=tcons->covlen;
-       }
-   if (qtdata->eqhead) {//head of a equivalency chain
-      //check if all transcripts in this chain have the same ovlcode
-      for (int k=0;k<qtdata->eqlist->Count();k++) {
-         GffObj* m=qtdata->eqlist->Get(k);
-        if (m->covlen>tmaxcov) {
-            tmaxcov=m->covlen;
-            tcons=m;
-            }
-        char ocode=((CTData*)m->uptr)->getBestCode();
-        if (ocode && ovlcode!='=' && ovlcode!='.' && ocode!=ovlcode) {
-              ovlcode='.'; //non-uniform ovlcode
-              }
-         }
-      }//chain check
-   //if (ovlcode=='p') ref=NULL; //ignore polymerase runs?
-   if (ovlcode==0 || ovlcode=='-' || ovlcode=='.') {
-	   ovlcode = (ref==NULL) ? 'u' : '.';
-   }
-   //-- print columns 1 and 2 as LOCUS_ID and TCONS_ID
-   //bool chainHead=(qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0));
-   bool chainHead=qtdata->eqhead;
-   //bool noChain=((qtdata->eqdata & EQCHAIN_TAGMASK)==0);
-   bool noChain=(eqchain==NULL);
-   if (chainHead || noChain) {
-     cnum++;
-     if (ft!=NULL) fprintf(ft,"%s_%08d\t",cprefix,cnum);
-     GXLocus* xloc=qtdata->locus->xlocus;
-     if (xloc!=NULL) {
-         if (ft!=NULL) fprintf(ft, "XLOC_%06d\t",xloc->id);
-         if (tcons->exons.Count()>1) {
-            //! only multi-exon mRNAs are counted for multi-transcript xloci !
-              xloc->num_mtcons++;
-              if (xloc->num_mtcons==2)
-                 total_xloci_alt++;
-              }
-         }
-      else {
-        //should NEVER happen!
-        int fidx=qtdata->qset;
-        GError("Error: no XLocus created for transcript %s (file %s) [%d, %d], on %s%c:%d-%d\n", qt.getID(),
-                           qryfiles[qtdata->locus->qfidx]->chars(), qtdata->locus->qfidx, fidx, qt.getGSeqName(), qt.strand, qt.start, qt.end);
-        }
-     addXCons(xloc, ref, ovlcode, tcons, eqchain);
-     } // if chain head or uniq entry (not part of a chain)
-   if (ft==NULL) continue;
-   if (chainHead) {
-      //this is the start of a equivalence class as a printing chain
-      if (ref!=NULL) fprintf(ft,"%s|%s\t%c", getGeneID(ref),ref->getID(), ovlcode);
-                else fprintf(ft,"-\t%c", ovlcode);
-      GffObj* m=mrnas[i];
-      CTData* mdata=(CTData*)m->uptr;
+	for (int i=0;i<mrnas.Count();i++) {
+		GffObj& qt=*(mrnas[i]);
+		CTData* qtdata=(CTData*)qt.uptr;
+		int qfidx=qtdata->qset;
+		char ovlcode=qtdata->classcode;
+		CEqList* eqchain=qtdata->eqlist;
+		GffObj* ref=NULL; //related ref -- it doesn't have to be fully matching
+		//GffObj* eqref=NULL; //fully ichain-matching ref
+		GffObj* tcons=NULL; //"consensus" (largest) transcript for a clique
+		int tmaxcov=0;
+		//eqchain.Add(&qt);
+		//eqref=qtdata->eqref;
+		if (qtdata->ovls.Count()>0 && qtdata->ovls[0]->mrna!=NULL) {
+			//if it has ovlcode with a ref
+			ref=qtdata->ovls[0]->mrna;
+			//consistency check: qtdata->ovls[0]->code==ovlcode
+			// -- let tcons be a transfrag, not a ref transcript
+			//tcons=eqref;
+			//if (tcons!=NULL) tmaxcov=tcons->covlen;
+		}
+		//chain pre-check
+		if (tcons==NULL || mrnas[i]->covlen>tmaxcov) {
+			tcons=mrnas[i];
+			tmaxcov=tcons->covlen;
+		}
+		if (qtdata->eqhead) {//head of a equivalency chain
+			//check if all transcripts in this chain have the same ovlcode
+			for (int k=0;k<qtdata->eqlist->Count();k++) {
+				GffObj* m=qtdata->eqlist->Get(k);
+				if (m->covlen>tmaxcov) {
+					tmaxcov=m->covlen;
+					tcons=m;
+				}
+				char ocode=((CTData*)m->uptr)->getBestCode();
+				//assign the "best" ovlcode according to class code ranking:
+				if (ocode && COvLink::coderank(ocode)<COvLink::coderank(ovlcode)) {
+					ovlcode=ocode;
+				}
+				/*if (ocode && ovlcode!='=' && ovlcode!='.' && ocode!=ovlcode) {
+				      ovlcode='.'; //non-uniform ovlcode, don't know what to use
+				      }*/
+			}
+		}//chain check
+		//if (ovlcode=='p') ref=NULL; //ignore polymerase runs?
+		if (ovlcode==0 || ovlcode=='-' || ovlcode=='.') {
+			ovlcode = (ref==NULL) ? 'u' : '.';
+		}
+		//-- print columns 1 and 2 as LOCUS_ID and TCONS_ID
+		//bool chainHead=(qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0));
+		bool chainHead=qtdata->eqhead;
+		//bool noChain=((qtdata->eqdata & EQCHAIN_TAGMASK)==0);
+		bool noChain=(eqchain==NULL);
+		if (chainHead || noChain) {
+			cnum++;
+			if (ft!=NULL) fprintf(ft,"%s_%08d\t",cprefix,cnum);
+			GXLocus* xloc=qtdata->locus->xlocus;
+			if (xloc!=NULL) {
+				if (ft!=NULL) fprintf(ft, "XLOC_%06d\t",xloc->id);
+				if (tcons->exons.Count()>1) {
+					//! only multi-exon mRNAs are counted for multi-transcript xloci !
+					xloc->num_mtcons++;
+					if (xloc->num_mtcons==2)
+						total_xloci_alt++;
+				}
+			}
+			else {
+				//should NEVER happen!
+				int fidx=qtdata->qset;
+				GError("Error: no XLocus created for transcript %s (file %s) [%d, %d], on %s%c:%d-%d\n", qt.getID(),
+						qryfiles[qtdata->locus->qfidx]->chars(), qtdata->locus->qfidx, fidx, qt.getGSeqName(), qt.strand, qt.start, qt.end);
+			}
+			addXCons(xloc, ref, ovlcode, tcons, eqchain);
+		} // if chain head or uniq entry (not part of a chain)
+		if (ft==NULL) continue;
+		if (chainHead) {
+			//this is the start of a equivalence class as a printing chain
+			if (ref!=NULL) fprintf(ft,"%s|%s\t%c", getGeneID(ref),ref->getID(), ovlcode);
+			else fprintf(ft,"-\t%c", ovlcode);
+			GffObj* m=mrnas[i];
+			CTData* mdata=(CTData*)m->uptr;
 
-      int lastpq=-1;
-      /*
+			int lastpq=-1;
+			/*
       for (int ptab=mdata->qset-lastpq; ptab>0;ptab--)
              if (ptab>1) fprintf(ft,"\t-");
                     else fprintf(ft,"\t");
@@ -2019,53 +2023,53 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
          fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
             iround(m->gscore/10), mdata->FPKM,mdata->conf_lo,mdata->conf_hi,mdata->cov, m->covlen);
          } //traverse and print row
-      */
-      eqchain->setUnique(false);
-      eqchain->setSorted((GCompareProc*) cmpTData_qset);
+			 */
+			eqchain->setUnique(false);
+			eqchain->setSorted((GCompareProc*) cmpTData_qset);
 
-      for (int k=0;k<eqchain->Count();k++) {
-         m=eqchain->Get(k);
-         mdata=(CTData*)m->uptr;
-         if (mdata->qset==lastpq) {
-            //shouldn't happen, unless this input set is messed up (has duplicates/redundant transfrags)
-            fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
-               //iround(m->gscore/10),
-            		m->exons.Count(),
-            		mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
-            continue;
-            }
-         for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
-             if (ptab>1) fprintf(ft,"\t-");
-                    else fprintf(ft,"\t");
-         lastpq = mdata->qset;
-         fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-            //iround(m->gscore/10),
-        		 m->exons.Count(),
-			mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
-         }
-      for (int ptab=qcount-lastpq-1;ptab>0;ptab--)
-            fprintf(ft,"\t-");
-      fprintf(ft,"\n");
-      continue;
-      } //start of eq class (printing chain)
+			for (int k=0;k<eqchain->Count();k++) {
+				m=eqchain->Get(k);
+				mdata=(CTData*)m->uptr;
+				if (mdata->qset==lastpq) {
+					//shouldn't happen, unless this input set is messed up (has duplicates/redundant transfrags)
+					fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
+							//iround(m->gscore/10),
+							m->exons.Count(),
+							mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+					continue;
+				}
+				for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
+					if (ptab>1) fprintf(ft,"\t-");
+					else fprintf(ft,"\t");
+				lastpq = mdata->qset;
+				fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
+						//iround(m->gscore/10),
+						m->exons.Count(),
+						mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+			}
+			for (int ptab=qcount-lastpq-1;ptab>0;ptab--)
+				fprintf(ft,"\t-");
+			fprintf(ft,"\n");
+			continue;
+		} //start of eq class (printing chain)
 
-   if (eqchain!=NULL) continue; //part of a matching chain, dealt with previously
+		if (eqchain!=NULL) continue; //part of a matching chain, dealt with previously
 
-   //--------- not in an ichain-matching class, print as singleton
+		//--------- not in an ichain-matching class, print as singleton
 
-   if (ref!=NULL) fprintf(ft,"%s|%s\t%c",getGeneID(ref), ref->getID(), ovlcode);
-             else fprintf(ft,"-\t%c",ovlcode);
-   for (int ptab=qfidx;ptab>=0;ptab--)
-      if (ptab>0) fprintf(ft,"\t-");
-             else fprintf(ft,"\t");
-   fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),
-		   //iround(qt.gscore/10),
-		   qt.exons.Count(),
-       qtdata->FPKM, qtdata->TPM, qtdata->cov);
-   for (int ptab=qcount-qfidx-1;ptab>0;ptab--)
-         fprintf(ft,"\t-");
-   fprintf(ft,"\n");
-   } //for each transcript
+		if (ref!=NULL) fprintf(ft,"%s|%s\t%c",getGeneID(ref), ref->getID(), ovlcode);
+		else fprintf(ft,"-\t%c",ovlcode);
+		for (int ptab=qfidx;ptab>=0;ptab--)
+			if (ptab>0) fprintf(ft,"\t-");
+			else fprintf(ft,"\t");
+		fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),
+				//iround(qt.gscore/10),
+				qt.exons.Count(),
+				qtdata->FPKM, qtdata->TPM, qtdata->cov);
+		for (int ptab=qcount-qfidx-1;ptab>0;ptab--)
+			fprintf(ft,"\t-");
+		fprintf(ft,"\n");
+	} //for each transcript
 }
 
 
@@ -2101,7 +2105,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
     //if ((qtdata->eqdata & EQCHAIN_TAGMASK)!=0) continue; //part of a matching chain, dealt with previously
 
     //--------- qry mrna not in a '=' matching clique
-    if (qtdata->eqref==NULL) { //find any rloc overlap
+    if (qtdata->eqref==NULL) { //find any rloc overlap -- class code
        if (qt.overlap(rloc.start, rloc.end)) {
           rmatch=findRefMatch(qt, rloc, rovlen);
           if (rmatch==NULL) {
