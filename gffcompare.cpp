@@ -437,7 +437,7 @@ int main(int argc, char * const argv[]) {
       //if (keepRefMatching) {
       //  discard_check=0;
       //}
-      read_mRNAs(f_in, *pdata, &ref_data, 0, fi, in_file.chars(), multiexon_only);
+      read_mRNAs(f_in, *pdata, &ref_data, 1, fi, in_file.chars(), multiexon_only);
       GSuperLocus gstats;
       GFaSeqGet *faseq=NULL;
       for (int g=0;g<pdata->Count();g++) { //for each seqdata related to a genomic sequence
@@ -1592,15 +1592,8 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
     double sp=(100.0*(double)ps->baseTP)/(ps->baseTP+ps->baseFP);
     double sn=(100.0*(double)ps->baseTP)/(ps->baseTP+ps->baseFN);
     fprintf(fout, "        Base level:   %5.1f     |   %5.1f    |\n",sn, sp);
-    //sp=(100.0*(double)ps->exonQTP)/(ps->exonTP+ps->exonFP);
     sp=(100.0*(double)ps->exonQTP)/ps->total_qexons;
-    //sn=(100.0*(double)ps->exonTP)/(ps->exonTP+ps->exonFN);
     sn=(100.0*(double)ps->exonTP)/ps->total_rexons;
-    /*double fsp=(100.0*(double)ps->exonATP)/(ps->exonATP+ps->exonAFP);
-    double fsn=(100.0*(double)ps->exonATP)/(ps->exonATP+ps->exonAFN);
-    if (fsp>100.0) fsp=100.0;
-    if (fsn>100.0) fsn=100.0;
-    */
     //DEBUG only:
     //fprintf(fout, "======> Exon stats: %d total_qexons, %d total_rexons, %d exonTP, %d exonFP, %d exonFN\n",
     //   ps->total_rexons, ps->total_qexons, ps->exonTP, ps->exonFP, ps->exonFN);
@@ -1609,49 +1602,17 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
     //intron level
     sp=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFP);
     sn=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFN);
-    /*fsp=(100.0*(double)ps->intronATP)/(ps->intronATP+ps->intronAFP);
-    fsn=(100.0*(double)ps->intronATP)/(ps->intronATP+ps->intronAFN);
-    if (fsp>100.0) fsp=100.0;
-    if (fsn>100.0) fsn=100.0;*/
     fprintf(fout, "      Intron level:   %5.1f     |   %5.1f    |\n",sn, sp);
     //intron chains:
-    //sp=(100.0*(double)ps->ichainTP)/(ps->ichainTP+ps->ichainFP);
-    //sn=(100.0*(double)ps->ichainTP)/(ps->ichainTP+ps->ichainFN);
     sp=(100.0*(double)ps->ichainTP)/ps->total_qichains;
     sn=(100.0*(double)ps->ichainTP)/ps->total_richains;
-    //if (sp>100.0) sp=100.0;
-    //if (sn>100.0) sn=100.0;
-    /*fsp=(100.0*(double)ps->ichainATP)/ps->total_qichains;
-    fsn=(100.0*(double)ps->ichainATP)/ps->total_richains;
-    if (fsp>100.0) fsp=100.0;
-    if (fsn>100.0) fsn=100.0;
-    */
     fprintf(fout, "Intron chain level:   %5.1f     |   %5.1f    |\n",sn, sp);
     }
-  /*else {
-    fprintf(fout, "      Intron level: \t  -  \t  -  \t  -  \t  -  \n");
-    fprintf(fout, "Intron chain level: \t  -  \t  -  \t  -  \t  -  \n");
-    }*/
-    /*
-    sp=(100.0*(double)ps->mrnaTP)/(ps->mrnaTP+ps->mrnaFP);
-    sn=(100.0*(double)ps->mrnaTP)/(ps->mrnaTP+ps->mrnaFN);
-    fsp=(100.0*(double)ps->mrnaATP)/(ps->mrnaATP+ps->mrnaAFP);
-    fsn=(100.0*(double)ps->mrnaATP)/(ps->mrnaATP+ps->mrnaAFN);
-    */
     sp=(100.0*(double)ps->mrnaTP)/ps->total_qmrnas;
     sn=(100.0*(double)ps->mrnaTP)/ps->total_rmrnas;
-    /*fsp=(100.0*(double)ps->mrnaATP)/ps->total_qmrnas;
-    fsn=(100.0*(double)ps->mrnaATP)/ps->total_rmrnas;
-    if (fsp>100.0) fsp=100.0;
-    if (fsn>100.0) fsn=100.0;
-    */
     fprintf(fout, "  Transcript level:   %5.1f     |   %5.1f    |\n",sn, sp);
-    //sp=(100.0*(double)ps->locusTP)/(ps->locusTP+ps->locusFP);
     sp=(100.0*(double)ps->locusQTP)/ps->total_qloci;
     sn=(100.0*(double)ps->locusTP)/ps->total_rloci;  //(ps->locusTP+ps->locusFN);
-    /*fsp=(100.0*(double)ps->locusAQTP)/ps->total_qloci; //(ps->locusATP+ps->locusAFP);
-    fsn=(100.0*(double)ps->locusATP)/ps->total_rloci; //(ps->locusATP+ps->locusAFN);
-    */
     fprintf(fout, "       Locus level:   %5.1f     |   %5.1f    |\n",sn, sp);
     //fprintf(fout, "                   (locus TP=%d, total ref loci=%d)\n",ps->locusTP, ps->total_rloci);
     fprintf(fout,"\n     Matching intron chains: %7d\n",ps->ichainTP);
@@ -1773,7 +1734,10 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
          //ovlen=mseg.overlapLen(r.start,r.end);
          if (singleExonTMatch(m, r, ovlen))
                   return '=';
-         if (m.covlen<r.covlen && ovlen >= m.covlen*0.8) return 'c'; //fuzzy containment
+         if (m.covlen<r.covlen)
+        	 { if (ovlen >= m.covlen*0.8) return 'c'; } //fuzzy containment
+         else //allow also some fuzzy reverse containment
+        	 if (ovlen >= r.covlen*0.8 && ovlen >= m.covlen* 0.7 ) return '=';
          return 'o'; //just plain overlapping
          }
      //single-exon qry overlaping multi-exon ref
@@ -1931,8 +1895,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		CEqList* eqchain=qtdata->eqlist;
 		GffObj* ref=NULL; //related ref -- it doesn't have to be fully matching
 		//GffObj* eqref=NULL; //fully ichain-matching ref
-		GffObj* tcons=NULL; //"consensus" (largest) transcript for a clique
-		int tmaxcov=0;
+		//GffObj* tcons=NULL; //"consensus" (largest) transcript for a clique
+		//int tmaxcov=0;
 		//eqchain.Add(&qt);
 		//eqref=qtdata->eqref;
 		if (qtdata->ovls.Count()>0 && qtdata->ovls[0]->mrna!=NULL) {
@@ -1943,34 +1907,34 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 			//tcons=eqref;
 			//if (tcons!=NULL) tmaxcov=tcons->covlen;
 		}
-		//chain pre-check
-		if (tcons==NULL || mrnas[i]->covlen>tmaxcov) {
-			tcons=mrnas[i];
-			tmaxcov=tcons->covlen;
-		}
+		GffObj* tcons=mrnas[i];
+		int tmaxcov=tcons->covlen;
+		ovlcode=qtdata->getBestCode();
+
 		if (qtdata->eqhead) {//head of a equivalency chain
 			//check if all transcripts in this chain have the same ovlcode
-			GffObj* tcons_bycode=tcons;
-			bool ovlcode_change=false;
+			//GffObj* tcons_bycode=tcons;
+			//bool ovlcode_change=false;
 			for (int k=0;k<qtdata->eqlist->Count();k++) {
 				GffObj* m=qtdata->eqlist->Get(k);
 				if (m->covlen>tmaxcov) {
 					tmaxcov=m->covlen;
 					tcons=m;
+					ovlcode=((CTData*)m->uptr)->getBestCode();
 				}
-				char ocode=((CTData*)m->uptr)->getBestCode();
+				//char ocode=((CTData*)m->uptr)->getBestCode();
 				//assign the "best" ovlcode according to class code ranking:
-				if (ocode && COvLink::coderank(ocode)<COvLink::coderank(ovlcode)) {
-					ovlcode=ocode;
-					ovlcode_change=true;
-					tcons_bycode=m;
-				}
+				//if (ocode && COvLink::coderank(ocode)<COvLink::coderank(ovlcode)) {
+				//	ovlcode=ocode;
+				//	ovlcode_change=true;
+				//	tcons_bycode=m;
+				//}
 				/*if (ocode && ovlcode!='=' && ovlcode!='.' && ocode!=ovlcode) {
 				      ovlcode='.'; //non-uniform ovlcode, don't know what to use
-				      }*/
+				}*/
 			}
-			if (ovlcode_change && tcons!=tcons_bycode)
-				tcons=tcons_bycode;
+			//if (ovlcode_change && tcons!=tcons_bycode)
+			//	tcons=tcons_bycode;
 		}//chain check
 		//if (ovlcode=='p') ref=NULL; //ignore polymerase runs?
 		if (ovlcode==0 || ovlcode=='-' || ovlcode=='.') {

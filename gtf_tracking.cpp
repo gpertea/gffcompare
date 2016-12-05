@@ -25,23 +25,26 @@ bool betterRef(GffObj* a, GffObj* b) {
      }
  }
 
-GffObj* is_RefDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx) {
+GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool isRef=false) {
  //mrnas MUST be sorted by start coordinate
+ //this is optimized for when mrnas list is being populated, in sorted order
+ //as it starts scanning from the end of the list
   int ovlen=0;
   dupidx=-1;
   if (mrnas.Count()==0) return NULL;
-  int nidx=qsearch_mrnas(m->end, mrnas);
-  if (nidx==0) return NULL;
-  if (nidx==-1) nidx=mrnas.Count();//all can overlap
+  //int nidx=qsearch_mrnas(m->end, mrnas);
+  //if (nidx==0) return NULL;
+  //if (nidx==-1) nidx=mrnas.Count();//all can overlap
+  int nidx=mrnas.Count();
   for (int i=nidx-1;i>=0;i--) {
       GffObj& omrna=*mrnas[i];
       if (m->start>omrna.end) {
-           if (m->start-omrna.start>GFF_MAX_EXON) break; //give up already
+           if (m->start-omrna.start>GFF_MAX_EXON) break; //give up already, went too far back
            continue;
            }
-      if (omrna.start>m->end) continue; //this should never be the case if nidx was found correctly
+      if (omrna.start>m->end) continue; //this should never be the case if nidx was found with qsearch_mrnas(m->end)
       //locus overlap here:
-      if (tMatch(*m, omrna, ovlen, false, true)) {
+      if (tMatch(*m, omrna, ovlen, !isRef, isRef)) {
              dupidx=i;
              return mrnas[i];
              }
@@ -194,7 +197,7 @@ bool t_dominates(GffObj* a, GffObj* b) {
     else return (a->exons.Count()>b->exons.Count());
 }
 
-bool betterDupRef(GffObj* a, GffObj* b) {
+bool betterTDup(GffObj* a, GffObj* b) {
   if (a->exons.Count()!=b->exons.Count())
     return (a->exons.Count()>b->exons.Count());
   if (a->hasCDS()!=b->hasCDS())
@@ -212,7 +215,7 @@ int parse_mRNAs(GfList& mrnas,
 				 int qfidx, bool only_multiexon) {
 	int tredundant=0; //redundant transcripts discarded
 	int total_kept=0;
-	int total_seen=mrnas.Count();
+	//int total_seen=mrnas.Count();
 	for (int k=0;k<mrnas.Count();k++) {
 		GffObj* m=mrnas[k];
 		int i=-1;
@@ -257,6 +260,8 @@ int parse_mRNAs(GfList& mrnas,
 		if (is_ref_set) { //-- ref transcripts
 		   if (m->strand=='.') {
 		     //unknown strand - discard from reference set (!)
+			 if (gtf_tracking_verbose)
+				 GMessage("Warning: reference transcript %s has undetermined strand, discarded.\n");
 		     continue;
 		     }
 		   total_kept++;
@@ -264,7 +269,7 @@ int parse_mRNAs(GfList& mrnas,
 		   if (check_for_dups) {
 		     //check all gdata->mrnas_r (ref_data) for duplicate ref transcripts
 		     int rpidx=-1;
-		     GffObj* rp= is_RefDup(m, *target_mrnas, rpidx);
+		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true);
 		     if (rp!=NULL) { //duplicate found
 		      //discard one of them
 		      //but let's keep the gene_name if present
@@ -272,7 +277,7 @@ int parse_mRNAs(GfList& mrnas,
 		      //GMessage("Ref duplicates: %s = %s\n", rp->getID(), m->getID());
 		      tredundant++;
 		      total_kept--;
-		      if (betterDupRef(rp, m)) {
+		      if (betterTDup(rp, m)) {
 		           if (rp->getGeneName()==NULL && m->getGeneName()!=NULL) {
 		                  rp->setGeneName(m->getGeneName());
 		                  }
@@ -295,43 +300,26 @@ int parse_mRNAs(GfList& mrnas,
 		     else if (m->strand=='-') { target_mrnas=&(gdata->mrnas_r); }
 		        else { m->strand='.'; target_mrnas=&(gdata->umrnas); }
 		   total_kept++;
-		   /* never discard sample transfrags, will check for redundancy at the end
-		   if (check_for_dups) { //check for redundancy
-		     // check if there is a redundancy between this and another already loaded Cufflinks transcript
-		     int cidx =  is_Redundant(m, target_mrnas, (check_for_dups>1), intron_poking);
-		     if (cidx>=0) { //found a redundant transcript
-		        //always discard the redundant transcript with the fewer exons OR shorter
-			     tredundant++;
-		         total_kept--;
-		    	 if (t_dominates(target_mrnas->Get(cidx),m)) {
-		            //new transcript is shorter, discard it
-		        	//if (gtf_tracking_verbose) {
-		        	//	GMessage(" transfrag %s discarded (made redundant by %s)\n", m->getID(), target_mrnas->Get(cidx)->getID());
-		        	//}
-		            if (keep_dups) {
-		            	dup_by=target_mrnas->Get(cidx);
-		            }
-		            else continue;
-		        }
-		        else {
-		            //discard the older transfrag
-		        	//if (gtf_tracking_verbose) {
-		        	//	GMessage(" transfrag %s discarded (made redundant by %s)\n", target_mrnas->Get(cidx)->getID(), m->getID());
-		        	//}
-		        	if (keep_dups) {
-		        		((CTData*)(target_mrnas->Get(cidx)->uptr))->dup_of=m;
-		        	}
-		        	else {
-		              ((CTData*)(target_mrnas->Get(cidx)->uptr))->mrna=NULL;
-		              target_mrnas->Get(cidx)->isUsed(false);
-		              target_mrnas->Forget(cidx);
-		              target_mrnas->Delete(cidx);
-		        	}
-		            //the uptr (CTData) pointer will still be kept in gdata->ctdata and deallocated eventually
-		        }
-		     }
+		   // discard duplicate sample transfrags (but will also check for redundancy at the end)
+		   if (check_for_dups) { //check for duplicate transfrag in the same sample (bad)
+		     // check if there is a duplication between this and another already loaded transfrag
+			 int rpidx=-1;
+			 GffObj* rp= is_TDup(m, *target_mrnas, rpidx);
+			 if (rp!=NULL) {
+				 //always discard the redundant transcript with the fewer exons OR shorter
+				 tredundant++;
+				 total_kept--;
+				 if (betterTDup(rp, m)) {
+					 continue;
+				 }
+				 else {
+					 ((CTData*)(rp->uptr))->mrna=NULL;
+					 rp->isUsed(false);
+					 target_mrnas->Forget(rpidx);
+					 target_mrnas->Delete(rpidx);
+				 }
+			 }
 		   }// redundant transfrag check
-		   */
 		   if (m->gscore==0.0)
 		     m->gscore=m->exons[0]->score; //Cufflinks exon score = isoform abundance
 
@@ -384,6 +372,7 @@ int parse_mRNAs(GfList& mrnas,
 		   //mdata->conf_lo=conf_lo;
 		   }
 	}//for each mrna read
+	/*
 	if (gtf_tracking_verbose && total_kept!=total_seen) {
 		if (is_ref_set) {
           GMessage(" Kept %d ref transcripts out of %d (%d redundant discarded)\n",
@@ -394,18 +383,20 @@ int parse_mRNAs(GfList& mrnas,
 	    		 total_kept, total_seen, tredundant);
 		}
 	}
+	*/
 	return tredundant;
 }
 
-bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
+bool singleExonTMatch(GffObj& m, GffObj& n, int& ovlen) {
  //if (m.exons.Count()>1 || r.exons.Count()>1..)
  GSeg mseg(m.start, m.end);
- ovlen=mseg.overlapLen(r.start,r.end);
- int lmax=m.covlen;
- int lmin=r.covlen;
- if (lmin>lmax) Gswap(lmin,lmax);
- return ((ovlen >= lmax*0.7) // fuzz matching for single-exon transcripts: 80% of the longer one
-             || (ovlen >= lmin*0.8)); // fuzzy reverse-containment - the reference transcript is shorter
+ ovlen=mseg.overlapLen(n.start,n.end);
+ // fuzz matching for single-exon transcripts:
+ // overlap should be 80% of the length of the longer one
+ if (m.covlen>n.covlen) {
+   return (ovlen >= m.covlen*0.8);
+ } else
+   return (ovlen >= n.covlen*0.8);
 }
 
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only) {
@@ -415,20 +406,15 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only)
 	ovlen=0;
 	if (imax!=jmax) return false; //different number of exons
 	if (imax==0) { //single-exon mRNAs
-		if (contain_only) {
-		   return ((a.start>=b.start && a.end<=b.end) || 
-		           (b.start>=a.start && b.end<=a.end));
+		if (contain_only) { //require strict boundary containment (a in b or b in a)
+			//but also that at least 80% of the largest one be covered
+		   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
+		           (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.8));
 		}
 		if (fuzzunspl) {
-			//fuzz match for single-exon transfrags: 
-			// it's a match if they overlap at least 80% of longest one
-			//ovlen=a.exons[0]->overlapLen(b.exons[0]);
-			//int maxlen=GMAX(a.covlen,b.covlen);
-			//return (ovlen>=maxlen*0.8);
 			return (singleExonTMatch(a,b,ovlen));
-		}
-	  else {
-			//only exact match
+		} else {
+			//only perfect coordinate match
 			ovlen=a.covlen;
 			return (a.exons[0]->start==b.exons[0]->start &&
 					a.exons[0]->end==b.exons[0]->end);
@@ -447,7 +433,7 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only)
 			return false; //intron mismatch
 		}
 	}
-	if (contain_only) 
+	if (contain_only) //requires actual coordinate containing
 		     return ((a.start>=b.start && a.end<=b.end) || 
 		           (b.start>=a.start && b.end<=a.end));
 		else return true;
@@ -671,8 +657,8 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
       HeapProfilerDump("post_parse_mRNAs");
 #endif
 	if (gtf_tracking_verbose && d>0) {
-	  if (isRefData) GMessage(" %d duplicate reference transcripts discarded.\n",d);
-	            else GMessage(" %d redundant query transfrags detected (to be discarded).\n",d);
+	  if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
+	            else GMessage("  %d duplicate query transfrags discarded.\n",d);
 	  }
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs

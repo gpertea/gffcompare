@@ -1308,7 +1308,8 @@ class GXLocus:public GSeg {
              int lmax=a->covlen;
              int lmin=b->covlen;
              if (lmin>lmax) Gswap(lmin,lmax);
-             if (ovlen>=lmax*0.7 || ovlen>=lmin*0.8) { //if at least 80% of the shorter one is covered, it is contained
+             //if (ovlen>=lmax*0.7 || ovlen>=lmin*0.85) { //if at least 85% of the shorter one is covered, it is contained
+             if (ovlen>=lmin*0.85) { //if at least 85% of the shorter one is covered, it is considered contained
                 return ((a->covlen>b->covlen) ? 1 : -1);
                 }
               else return 0;
@@ -1350,7 +1351,7 @@ void sort_GSeqs_byName(GList<GSeqData>& seqdata);
 bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
 
 //strict intron chain match, or single-exon match
-bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false, 
+bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false,
            bool contain_only=false);
 
 //use qsearch to "position" a given coordinate x within a list of transcripts sorted 
