@@ -1921,6 +1921,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 					tmaxcov=m->covlen;
 					tcons=m;
 					ovlcode=((CTData*)m->uptr)->getBestCode();
+					if (((CTData*)m->uptr)->ovls.Count()>0)
+						ref=((CTData*)m->uptr)->ovls[0]->mrna;
 				}
 				//char ocode=((CTData*)m->uptr)->getBestCode();
 				//assign the "best" ovlcode according to class code ranking:
@@ -1938,7 +1940,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		}//chain check
 		//if (ovlcode=='p') ref=NULL; //ignore polymerase runs?
 		if (ovlcode==0 || ovlcode=='-' || ovlcode=='.') {
-			ovlcode = (ref==NULL) ? 'u' : '.';
+			ovlcode = (ref==NULL) ? 'u' : '.'; //should never be '.' here
 		}
 		//-- print columns 1 and 2 as LOCUS_ID and TCONS_ID
 		//bool chainHead=(qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0));
