@@ -1950,6 +1950,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		}
 		if (qtdata->eqhead) {//head of a equivalency chain
 			//check if all transcripts in this chain have the same ovlcode
+			GffObj* tcons_bycode=tcons;
+			bool ovlcode_change=false;
 			for (int k=0;k<qtdata->eqlist->Count();k++) {
 				GffObj* m=qtdata->eqlist->Get(k);
 				if (m->covlen>tmaxcov) {
@@ -1960,11 +1962,15 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 				//assign the "best" ovlcode according to class code ranking:
 				if (ocode && COvLink::coderank(ocode)<COvLink::coderank(ovlcode)) {
 					ovlcode=ocode;
+					ovlcode_change=true;
+					tcons_bycode=m;
 				}
 				/*if (ocode && ovlcode!='=' && ovlcode!='.' && ocode!=ovlcode) {
 				      ovlcode='.'; //non-uniform ovlcode, don't know what to use
 				      }*/
 			}
+			if (ovlcode_change && tcons!=tcons_bycode)
+				tcons=tcons_bycode;
 		}//chain check
 		//if (ovlcode=='p') ref=NULL; //ignore polymerase runs?
 		if (ovlcode==0 || ovlcode=='-' || ovlcode=='.') {
