@@ -2034,10 +2034,10 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		for (int ptab=qfidx;ptab>=0;ptab--)
 			if (ptab>0) fprintf(ft,"\t-");
 			else fprintf(ft,"\t");
-		fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|-",qfidx+1, getGeneID(qt), qt.getID(),
+		fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d",qfidx+1, getGeneID(qt), qt.getID(),
 				//iround(qt.gscore/10),
 				qt.exons.Count(),
-				qtdata->FPKM, qtdata->TPM, qtdata->cov);
+				qtdata->FPKM, qtdata->TPM, qtdata->cov, qt.covlen);
 		for (int ptab=qcount-qfidx-1;ptab>0;ptab--)
 			fprintf(ft,"\t-");
 		fprintf(ft,"\n");
