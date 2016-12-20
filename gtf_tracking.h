@@ -867,8 +867,8 @@ public:
 	//--> the fields below are not used by reference data --
 	GList<GSuperLocus> gstats_f; //stats for forward strand superloci
 	GList<GSuperLocus> gstats_r; //stats for reverse strand superloci
-	GList<GLocus> nloci_f; //"novel" loci on forward strand
-	GList<GLocus> nloci_r; //"novel" loci on reverse strand
+	GList<GLocus> nloci_f; //"novel" loci on forward strand (no ref overlap)
+	GList<GLocus> nloci_r; //"novel" loci on reverse strand (no ref overlap)
 	GList<GffObj> umrnas; //unknown orientation mrnas
 	GList<GLocus> nloci_u; //"novel" loci with no orientation found
 	

@@ -2242,20 +2242,22 @@ void reclass_mRNAs(char strand, GList<GffObj>& mrnas, GList<GLocus>* rloci, GFaS
 
 }
 
-void reclassLoci(char strand, GList<GLocus>& qloci, GList<GLocus>* rloci, GFaSeqGet *faseq) {
+/* void reclassLoci(char strand, GList<GLocus>& qloci, GList<GLocus>* rloci, GFaSeqGet *faseq) {
   for (int ql=0;ql<qloci.Count();ql++) {
     reclass_mRNAs(strand, qloci[ql]->mrnas, rloci, faseq);
     //find closest upstream ref locus for this q locus
   } //for each locus
-}
+}*/
 
 //for a single genomic sequence, all qry data and ref data is stored in gtrack
 //check for all 'u' transfrags if they are repeat ('r') or polymerase run 'p' or anything else
 void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=NULL) {
     for (int q=0;q<qcount;q++) {
         if (gtrack.qdata[q]==NULL) continue; //no transcripts in this q dataset for this genomic seq
-        reclassLoci('+', gtrack.qdata[q]->loci_f, gtrack.rloci_f, faseq);
-        reclassLoci('-', gtrack.qdata[q]->loci_r, gtrack.rloci_r, faseq);
+        //reclassLoci('+', gtrack.qdata[q]->loci_f, gtrack.rloci_f, faseq);
+        //reclassLoci('-', gtrack.qdata[q]->loci_r, gtrack.rloci_r, faseq);
+        reclass_mRNAs('+', gtrack.qdata[q]->mrnas_f, gtrack.rloci_f, faseq);
+        reclass_mRNAs('-', gtrack.qdata[q]->mrnas_r, gtrack.rloci_r, faseq);
         reclass_mRNAs('+', gtrack.qdata[q]->umrnas, gtrack.rloci_f, faseq);
         reclass_mRNAs('-', gtrack.qdata[q]->umrnas, gtrack.rloci_r, faseq);
         //and also check for special cases with cross-strand overlaps:
@@ -2434,34 +2436,33 @@ void recheckUmrnas(GSeqData* gseqdata, GList<GffObj>& mrnas,
 */
 
 void umrnasXStrand(GList<GXLocus>& xloci, GSeqTrack& gtrack) {
-  //try to determine the strand of unoriented transfrags based on possible overlaps
-  //with other, oriented transfrags
+  //try to assign a strand to unoriented transfrags due to overlaps
+  //with oriented loci from other samples
  for (int x=0;x<xloci.Count();x++) {
-   if (xloci[x]->strand=='.') continue;
+   char newStrand=xloci[x]->strand;
+   if (newStrand=='.') continue;
    if (xloci[x]->qloci.Count()==0) continue;
    //go through all qloci in this xlocus
    for (int l = 0; l < xloci[x]->qloci.Count(); l++) {
      char locstrand=xloci[x]->qloci[l]->mrna_maxcov->strand;
      if (locstrand=='.') {
-        //this is a umrna cluster
-        GLocus* qloc=xloci[x]->qloci[l];
-        //we don't really need to update loci lists (loci_f, nloci_f etc.)
-        /*
-        if (xloci[x]->strand=='+') {
-           }
-         else { // - strand
-           }
-        */
+        //this is a unoriented cluster which is now being assigned to xloci[x]->strand
+        GLocus* qloc=xloci[x]->qloci[l]; //qry cluster having all its transfrags assigned a strand
+        GSeqData* qtrackdata=gtrack.qdata[qloc->qfidx];
+        //all the previously unoriented transfrags in qloc
+        //will be taken out of qtrackdata->umrnas,
+        // but NOTE: their loci are still left in qtrackdata->nloci_u
+        // and qtrackdata->loci_f/r are NOT updated
         for (int i=0;i<qloc->mrnas.Count();i++) {
-           qloc->mrnas[i]->strand=xloci[x]->strand;
-           int uidx=gtrack.qdata[qloc->qfidx]->umrnas.IndexOf(qloc->mrnas[i]);
+           qloc->mrnas[i]->strand=newStrand; //assign new strand and move
+           int uidx=qtrackdata->umrnas.IndexOf(qloc->mrnas[i]);
            if (uidx>=0) {
-                gtrack.qdata[qloc->qfidx]->umrnas.Forget(uidx);
-                gtrack.qdata[qloc->qfidx]->umrnas.Delete(uidx);
+        	   qtrackdata->umrnas.Forget(uidx);
+        	   qtrackdata->umrnas.Delete(uidx);
                 if (xloci[x]->strand=='+')
-                     gtrack.qdata[qloc->qfidx]->mrnas_f.Add(qloc->mrnas[i]);
+                	qtrackdata->mrnas_f.Add(qloc->mrnas[i]);
                    else
-                     gtrack.qdata[qloc->qfidx]->mrnas_r.Add(qloc->mrnas[i]);
+                	qtrackdata->mrnas_r.Add(qloc->mrnas[i]);
                 }
            }
         } //unknown strand
