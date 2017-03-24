@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.9.9c"
+#define VERSION "0.9.9d"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\

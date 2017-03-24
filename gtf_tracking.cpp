@@ -310,9 +310,15 @@ int parse_mRNAs(GfList& mrnas,
 				 tredundant++;
 				 total_kept--;
 				 if (betterTDup(rp, m)) {
-					 continue;
+					if (gtf_tracking_verbose)
+					   GMessage("Query transcript %s discarded (duplicate of %s)\n", 
+					      m->getID(), rp->getID() );
+					continue;
 				 }
 				 else {
+					if (gtf_tracking_verbose)
+					   GMessage("Query transcript %s discarded (duplicate of %s)\n", 
+					      rp->getID(), m->getID() );
 					 ((CTData*)(rp->uptr))->mrna=NULL;
 					 rp->isUsed(false);
 					 target_mrnas->Forget(rpidx);
