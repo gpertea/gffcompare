@@ -155,9 +155,10 @@ public:
 			case 'j': return 4; // overlap with at least a junction match
 			case 'e': return 6; // single exon transfrag overlapping an intron of reference (possible pre-mRNA)
 			case 'o': return 8; // generic exon overlap
-			case 's': return 16; //"shadow" - an intron overlaps with a ref intron on the opposite strand
-			case 'x': return 18; // exon overlap on opposite strand (usually wrong strand mapping)
-			case 'i': return 20; // intra-intron
+			case 's': return 16; //"shadow" - an intron overlaps with a ref intron on the opposite strand (wrong strand mapping?)
+			case 'x': return 18; // generic overlap on opposite strand (usually wrong strand mapping)
+			case 'i': return 20; // intra-intron (transfrag fully contained within a reference intron)
+			case 'y': return 30; // no exon overlap: ref exons fall within transfrag introns!
 			case 'p': return 90; //polymerase run
 			case 'r': return 92; //repeats
 			case 'u': return 94; //intergenic
