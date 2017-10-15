@@ -1720,7 +1720,6 @@ void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* 
  xloc->addXCons(c);
 }
 
-
 const uint pre_mrna_threshold = 100;
 
 char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
@@ -1736,9 +1735,9 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			if (singleExonTMatch(m, r, ovlen))
 				return '=';
 			if (m.covlen<r.covlen)
-			{ if (ovlen >= m.covlen*0.8) return 'c'; } //fuzzy containment
-			else //allow also some fuzzy reverse containment
-				if (ovlen >= r.covlen*0.8 && ovlen >= m.covlen* 0.7 ) return '=';
+			   { if (ovlen >= m.covlen*0.8) return 'c'; } // fuzzy containment
+			else
+				if (ovlen >= r.covlen*0.8 ) return 'k';   // fuzzy reverse containment
 			return 'o'; //just plain overlapping
 		}
 		//single-exon qry overlaping multi-exon ref
@@ -1767,8 +1766,8 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 	} //single-exon transfrag
 	//-- from here on we check a multi-exon transfrag --
 	int imax=m.exons.Count()-1;// imax>0 here
-	//check for a single-exon reference overlap:
-	if (jmax==0) {
+
+	if (jmax==0) { //single-exon reference overlap
 		//any exon overlap?
 		GSeg rseg(r.start, r.end);
 		for (int i=0;i<=imax;i++) {
@@ -1777,7 +1776,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			if (exovlen>0) {
 				ovlen+=exovlen;
 				if (r.start>m.exons[i]->start-4 && r.end<m.exons[i]->end+4) {
-					return 'o'; //reference contained in this assembled exon
+					return 'k'; //reference contained in this assembled exon
 				}
 			}
 			if (i==imax) break;
@@ -1797,62 +1796,77 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 		return 'o'; //but terminal exons do!
 	int i=1; //index of exon to the right of current qry intron
 	int j=1; //index of exon to the right of current ref intron
-	//find first intron overlap
-	while (i<=imax && j<=jmax) {
+	while (i<=imax && j<=jmax) { //find first intron overlap
 		if (r.exons[j]->start<m.exons[i-1]->end) { j++; continue; }
 		if (m.exons[i]->start<r.exons[j-1]->end) { i++; continue; }
-		break; //we have an intron overlap!
+		break; //we have an intron overlap
 	}
 	if (i>imax || j>jmax)
 		return 'o'; //no initial intron overlap found
 	//from here on we check all qry introns against ref introns
-	bool jmatch=false; //true if at least a junction match is found
-	bool icmatch=(i==1); //intron chain match - it will be updated as introns are checked
-	//bool exovli=false; // if any terminal exon of qry extends into a ref intron
-	//int imstart=i; //index of first intron overlap of query
-	int jmstart=j; //index of first intron overlap of reference
-	int jmend=0;  //index of last intron overlap of reference
-	int imend=0;  //index of last intron overlap of query
+	bool junct_match=false; //true if at least a junction match is found
+	//bool ichain_match=(i==1); //intron chain match, to be updated as introns are checked
+	bool ichain_match=true; //if there is intron (sub-)chain match
+	int imfirst=i; //index of first intron match in query
+	int jmfirst=j; //index of first intron match in reference
+	int imlast=-1;  //index of first intron match in query
+	int jmlast=-1;  //index of first intron match in reference
 	//check for intron matches
 	while (i<=imax && j<=jmax) {
 		uint mstart=m.exons[i-1]->end;
 		uint mend=m.exons[i]->start;
 		uint rstart=r.exons[j-1]->end;
 		uint rend=r.exons[j]->start;
-		if (rend<mstart) { j++; icmatch=false; continue; } //skipping ref intron, no ichain match
-		if (mend<rstart) { i++; icmatch=false; continue; } //skipping qry intron, no ichain match
-		//overlapping introns here, test junction matching
-		jmend=j; //keep track of last overlapping intron
-		imend=i;
+		if (rend<mstart) { j++; ichain_match=false; continue; } //no intron overlap, skipping ref intron
+		if (mend<rstart) { i++; ichain_match=false; continue; } //no intron overlap, skipping qry intron
+		//jovllast=j; //keep track of last overlapping intron
+		//iovllast=i;
+		//overlapping introns, test junction matching
 		bool smatch=(mstart==rstart);
 		bool ematch=(mend==rend);
-		if (smatch || ematch) jmatch=true;
-		if (smatch && ematch) { i++; j++; } //perfect match for this intron
-		else { //at least one junction doesn't match
-			icmatch=false;
-			if (mend>rend) j++; else i++;
-		}
+		if (smatch || ematch) junct_match=true;
+		if (smatch && ematch) {
+			//perfect match for this intron
+			if (ichain_match) { imlast=i; jmlast=j; }
+			i++; j++;
+			continue;
+		}//intron match
+		//-- not an intron match:
+		ichain_match=false;
+		if (mend>rend) j++; else i++;
 	} //while checking intron overlaps
 
-	if (icmatch && imend==imax) { // qry intron chain match
-		if (jmstart==1 && jmend==jmax) return '='; //identical intron chains
-		// -- qry intron chain is shorter than ref intron chain --
-		int l_iovh=0;   // overhang of leftmost q exon left boundary beyond the end of ref intron to the left
-		int r_iovh=0;   // same type of overhang through the ref intron on the right
-		if (jmstart>1 && r.exons[jmstart-1]->start>m.start)
-			l_iovh = r.exons[jmstart-1]->start - m.start;
-		if (jmend<jmax && m.end > r.exons[jmend]->end)
-			r_iovh = m.end - r.exons[jmend]->end;
-		if (l_iovh<4 && r_iovh<4) return 'c';
+	if (ichain_match) { //intron sub-chain match
+		if (imfirst==1 && imlast==imax) { // qry full intron chain match
+			if (jmfirst==1 && jmlast==jmax) return '='; //identical intron chains
+			// -- qry intron chain is shorter than ref intron chain --
+			int l_iovh=0;   // overhang of leftmost q exon left boundary beyond the end of ref intron to the left
+			int r_iovh=0;   // same type of overhang through the ref intron on the right
+			if (jmfirst>1 && r.exons[jmfirst-1]->start>m.start)
+				l_iovh = r.exons[jmfirst-1]->start - m.start;
+			if (jmlast<jmax && m.end > r.exons[jmlast]->end)
+				r_iovh = m.end - r.exons[jmlast]->end;
+			if (l_iovh<4 && r_iovh<4) return 'c';
+		} else if ((jmfirst==1 && jmlast==jmax)) {//ref full intron chain match
+			//check if the reference i-chain is contained in qry i-chain
+			int l_jovh=0;   // overhang of leftmost q exon left boundary beyond the end of ref intron to the left
+			int r_jovh=0;   // same type of overhang through the ref intron on the right
+			if (imfirst>1 && m.exons[imfirst-1]->start>r.start)
+				l_jovh = m.exons[imfirst-1]->start - r.start;
+			if (imlast<imax && r.end > m.exons[imlast]->end)
+				r_jovh = r.end - m.exons[imlast]->end;
+			if (l_jovh<4 && r_jovh<4) return 'k'; //reverse containment
+		}
 		return 'j';
 	}
-	if (jmatch) return 'j';
+	if (junct_match) return 'j';
 	//we could have 'o' or 'y' here
 	//any real exon overlaps?
 	ovlen=m.exonOverlapLen(r);
 	if (ovlen>4) return 'o';
-	return 'y'; //it's possible to have all reference exons within transfrag introns!
+	return 'y'; //all reference exons are within transfrag introns!
 }
+
 
 char getRefOvl(GffObj& m, GLocus& rloc, GffObj*& rovl, int& ovlen) {
 	rovl=NULL;

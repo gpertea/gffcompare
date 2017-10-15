@@ -151,7 +151,8 @@ public:
 	static int coderank(char c) {
 		switch (c) {
 			case '=': return 0; //ichain match
-			case 'c': return 2; //containment (ichain fragment)
+			case 'c': return 2; //containment
+			case 'k': return 4; // reverse containment
 			case 'j': return 4; // overlap with at least a junction match
 			case 'e': return 6; // single exon transfrag overlapping an intron of reference (possible pre-mRNA)
 			case 'o': return 8; // generic exon overlap

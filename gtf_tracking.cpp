@@ -392,7 +392,7 @@ int parse_mRNAs(GfList& mrnas,
 	*/
 	return tredundant;
 }
-
+/*
 bool singleExonTMatch(GffObj& m, GffObj& n, int& ovlen) {
  //if (m.exons.Count()>1 || r.exons.Count()>1..)
  GSeg mseg(m.start, m.end);
@@ -403,6 +403,20 @@ bool singleExonTMatch(GffObj& m, GffObj& n, int& ovlen) {
    return (ovlen >= m.covlen*0.8);
  } else
    return (ovlen >= n.covlen*0.8);
+}
+*/
+bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
+ //if (m.exons.Count()>1 || r.exons.Count()>1..)
+ GSeg mseg(m.start, m.end);
+ ovlen=mseg.overlapLen(r.start,r.end);
+ // fuzzy matching for single-exon transcripts:
+ // overlap should be 80% of the length of the longer one
+ if (m.covlen>r.covlen) {
+   return ( (ovlen >= m.covlen*0.8) ||
+		   (ovlen >= r.covlen*0.8 && ovlen >= m.covlen* 0.7 ));
+		   //allow also some fuzzy reverse containment
+ } else
+   return (ovlen >= r.covlen*0.8);
 }
 
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only) {
