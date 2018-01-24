@@ -285,7 +285,7 @@ int main(int argc, char * const argv[]) {
     if (f_ref==NULL) GError("Error opening reference gff: %s\n",s.chars());
     haveRefs=true;
     if (gtf_tracking_verbose) GMessage("Loading reference transcripts..\n");
-    read_mRNAs(f_ref, ref_data, &ref_data, 1, -1, s.chars(), (multiexonrefs_only || multiexon_only));
+    read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(), (multiexonrefs_only || multiexon_only));
     haveRefs=(ref_data.Count()>0);
     reduceRefs=(args.getOpt('R')!=NULL);
     reduceQrys=(args.getOpt('Q')!=NULL);
@@ -437,7 +437,7 @@ int main(int argc, char * const argv[]) {
       //if (keepRefMatching) {
       //  discard_check=0;
       //}
-      read_mRNAs(f_in, *pdata, &ref_data, 1, fi, in_file.chars(), multiexon_only);
+      read_mRNAs(f_in, *pdata, &ref_data, !gffAnnotate, fi, in_file.chars(), multiexon_only);
       GSuperLocus gstats;
       GFaSeqGet *faseq=NULL;
       for (int g=0;g<pdata->Count();g++) { //for each seqdata related to a genomic sequence

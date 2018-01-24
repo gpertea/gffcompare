@@ -211,7 +211,7 @@ bool betterTDup(GffObj* a, GffObj* b) {
 
 int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
-				 bool is_ref_set, int check_for_dups,
+				 bool is_ref_set, bool discardDups,
 				 int qfidx, bool only_multiexon) {
 	int tredundant=0; //redundant transcripts discarded
 	int total_kept=0;
@@ -266,7 +266,7 @@ int parse_mRNAs(GfList& mrnas,
 		     }
 		   total_kept++;
 		   target_mrnas=(m->strand=='+') ? &(gdata->mrnas_f) : &(gdata->mrnas_r);
-		   if (check_for_dups) {
+		   if (discardDups) {
 		     //check all gdata->mrnas_r (ref_data) for duplicate ref transcripts
 		     int rpidx=-1;
 		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true);
@@ -301,12 +301,11 @@ int parse_mRNAs(GfList& mrnas,
 		        else { m->strand='.'; target_mrnas=&(gdata->umrnas); }
 		   total_kept++;
 		   // discard duplicate sample transfrags (but will also check for redundancy at the end)
-		   if (check_for_dups) { //check for duplicate transfrag in the same sample (bad)
-		     // check if there is a duplication between this and another already loaded transfrag
+		   if (discardDups) { //check for a redundant transfrag already loaded
 			 int rpidx=-1;
 			 GffObj* rp= is_TDup(m, *target_mrnas, rpidx);
 			 if (rp!=NULL) {
-				 //always discard the redundant transcript with the fewer exons OR shorter
+				 //always discard the shorter transfrag
 				 tredundant++;
 				 total_kept--;
 				 if (betterTDup(rp, m)) {
@@ -634,7 +633,7 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
      crc_result = gffr.current_crc_result();
 #endif
 	//                               is_ref?    check_for_dups,
-	parse_mRNAs(gffr.gflst, seqdata, false,       0);
+	parse_mRNAs(gffr.gflst, seqdata, false,       false);
 }
 
 int cmpGSeqByName(const pointer p1, const pointer p2) {
@@ -646,7 +645,7 @@ void sort_GSeqs_byName(GList<GSeqData>& seqdata) {
 }
 
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
-	         int check_for_dups, int qfidx, const char* fname, bool only_multiexon) {
+	         bool discardDups, int qfidx, const char* fname, bool only_multiexon) {
 			 //bool intron_poking, bool keep_dups) {
 	//>>>>> read all transcripts/features from a GTF/GFF3 file
 	//int imrna_counter=0;
@@ -670,7 +669,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
     //int qtcount=gffr->gflst.Count();
     if (!isRefData && gtf_tracking_verbose)
     	GMessage("  %d query transcripts found.\n", gffr->gflst.Count());
-    int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, check_for_dups, qfidx,
+    int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, discardDups, qfidx,
     		             only_multiexon);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())

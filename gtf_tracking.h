@@ -1334,12 +1334,12 @@ class GXLocus:public GSeg {
 int parse_mRNAs(GfList& mrnas,
 				 GList<GSeqData>& glstdata,
 				 bool is_ref_set=true,
-				 int check_for_dups=0,
+				 bool discardDups=false,
 				 int qfidx=-1, bool only_multiexon=false);
 
 //reading a mRNAs from a gff file and grouping them into loci
 void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data=NULL, 
-              int check_for_dups=0, int qfidx=-1, const char* fname=NULL,
+              bool discardDups=false, int qfidx=-1, const char* fname=NULL,
               bool only_multiexon=false);
 
 void read_transcripts(FILE* f, GList<GSeqData>& seqdata, 
