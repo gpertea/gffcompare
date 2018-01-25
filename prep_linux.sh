@@ -17,6 +17,7 @@ cp LICENSE gffcompare ../$linpack/
 cd ..
 tar cvfz $linpack.tar.gz $linpack
 ls -l $srcpack.tar.gz $linpack.tar.gz
-echo "If you're on igmN machines you can also update the web files:"
-echo "cp $linpack.tar.gz $srcpack.tar.gz  ~/html/software/stringtie/dl/"
-echo "perl -i -pe 's/gffcompare\-\d+\.\d+\.\d+\w?\./gffcompare-$ver./g' ~/html/software/stringtie/gff.shtml"
+echo "scp $linpack.tar.gz $srcpack.tar.gz  ~/html/software/stringtie/dl/"
+echo "(then on the server:)"
+echo "perl -i -pe 's/gffcompare\-\d+\.\d+\.\d+\w?\./gffcompare-$ver./g' ~/html/software/stringtie/gff*.shtml"
+
