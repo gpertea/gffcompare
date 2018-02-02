@@ -12,12 +12,12 @@ echo "-------------------"
 mkdir $linpack
 cd $srcpack
 make clean
-make static
+make release
 cp LICENSE gffcompare ../$linpack/
 cd ..
 tar cvfz $linpack.tar.gz $linpack
 ls -l $srcpack.tar.gz $linpack.tar.gz
-echo "scp $linpack.tar.gz $srcpack.tar.gz  ~/html/software/stringtie/dl/"
+echo "scp $linpack.tar.gz $srcpack.tar.gz  salz:~/html/software/stringtie/dl/"
 echo "(then on the server:)"
 echo "perl -i -pe 's/gffcompare\-\d+\.\d+\.\d+\w?\./gffcompare-$ver./g' ~/html/software/stringtie/gff*.shtml"
 
