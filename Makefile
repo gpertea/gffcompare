@@ -1,6 +1,8 @@
-GCLDIR := ../gclib
+#GCLIB := ../gclib
 
-INCDIRS := -I. -I${GCLDIR}
+GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
+
+INCDIRS := -I${GCLIB}
 
 SYSTYPE :=     $(shell uname)
 
@@ -78,9 +80,9 @@ endif
 
 LINKER    := g++
 
-OBJS = ${GCLDIR}/GFastaIndex.o ${GCLDIR}/GFaSeqGet.o ${GCLDIR}/gff.o \
- ./gtf_tracking.o ${GCLDIR}/gdna.o ${GCLDIR}/codons.o ${GCLDIR}/GBase.o \
- ${GCLDIR}/GStr.o ${GCLDIR}/GArgs.o
+OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
+ ./gtf_tracking.o ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
+ ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
 .PHONY : all
 all:    gffcompare
@@ -90,7 +92,7 @@ static: gffcompare
 memcheck: gffcompare
 memdebug: gffcompare
 
-${GCLDIR}/gff.o  : ${GCLDIR}/gff.h
+${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
 ./gffcompare.o : ./gtf_tracking.h
 gffcompare: ${OBJS} ./gffcompare.o
