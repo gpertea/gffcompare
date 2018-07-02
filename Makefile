@@ -4,77 +4,53 @@ GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
 
 INCDIRS := -I${GCLIB}
 
-SYSTYPE :=     $(shell uname)
+BASEFLAGS  = -Wall -Wextra ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
 
-# C compiler
+GCCV8 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 8)
+ifeq "$(GCCV8)" "1"
+ BASEFLAGS += -Wno-class-memaccess
+endif
 
-MACHTYPE :=     $(shell uname -m)
-ifeq ($(MACHTYPE), i686)
-    MARCH = -march=i686 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
-else
-    MARCH = 
-endif    
+CXX   := $(if $(CXX),$(CXX),g++)
+LINKER  := $(if $(LINKER),$(LINKER),g++)
 
-# CVS checked in
-CC      := g++
-BASEFLAGS  = -Wall -Wextra ${INCDIRS} $(MARCH) \
- -fno-exceptions -fno-rtti -D_REENTRANT
+LDFLAGS := $(if $(LDFLAGS),$(LDFLAGS),-g)
+
+CXXFLAGS := $(if $(CXXFLAGS),$(BASEFLAGS) $(CXXFLAGS),$(BASEFLAGS))
 
 #
 
 ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
   # -- release build
-  CFLAGS = -O3 -DNDEBUG $(BASEFLAGS)
-  LDFLAGS = 
-  LIBS = 
+  LIBS := 
   ifneq (,$(findstring static,$(MAKECMDGOALS)))
     LDFLAGS += -static-libstdc++ -static-libgcc
   endif
+  CXXFLAGS := -O3 -DNDEBUG $(CXXFLAGS)
 else # debug build
+  CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG
   ifneq (,$(filter %memcheck %memdebug, $(MAKECMDGOALS)))
      #make memcheck : use the statically linked address sanitizer in gcc 4.9.x
      GCCVER49 := $(shell expr `g++ -dumpversion | cut -f1,2 -d.` \>= 4.9)
      ifeq "$(GCCVER49)" "0"
        $(error gcc version 4.9 or greater is required for this build target)
      endif
-     CFLAGS := -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=address
+     CXXFLAGS += -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=address
      GCCVER5 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 5)
      ifeq "$(GCCVER5)" "1"
-       CFLAGS += -fsanitize=bounds -fsanitize=float-divide-by-zero -fsanitize=vptr
-       CFLAGS += -fsanitize=float-cast-overflow -fsanitize=object-size
-       #CFLAGS += -fcheck-pointer-bounds -mmpx
+       CXXFLAGS += -fsanitize=bounds -fsanitize=float-divide-by-zero -fsanitize=vptr
+       CXXFLAGS += -fsanitize=float-cast-overflow -fsanitize=object-size
+       #CXXFLAGS += -fcheck-pointer-bounds -mmpx
      endif
-     CFLAGS += $(BASEFLAGS)
-     CFLAGS := -g -DDEBUG -D_DEBUG -DGDEBUG -fno-common -fstack-protector $(CFLAGS)
-     LDFLAGS := -g
+     #CFLAGS += $(BASEFLAGS)
+     CXXFLAGS += -fno-common -fstack-protector
      #LIBS := -Wl,-Bstatic -lasan -lubsan -Wl,-Bdynamic -ldl $(LIBS)
      LIBS := -lasan -lubsan -ldl $(LIBS)
-  else
-    #ifneq (,$(filter %memtrace %memusage %memuse, $(MAKECMDGOALS)))
-    #   BASEFLAGS += -DGMEMTRACE
-    #   GMEMTRACE=1
-    #endif
-    #--- just plain debug build ---
-     CFLAGS = -g -DDEBUG -D_DEBUG -DGDEBUG $(BASEFLAGS)
-     LDFLAGS = -g
-     LIBS = 
   endif
 endif
 
-%.o : %.c
-	${CC} ${CFLAGS} -c $< -o $@
-
-%.o : %.cc
-	${CC} ${CFLAGS} -c $< -o $@
-
-%.o : %.C
-	${CC} ${CFLAGS} -c $< -o $@
-
 %.o : %.cpp
-	${CC} ${CFLAGS} -c $< -o $@
-
-%.o : %.cxx
-	${CC} ${CFLAGS} -c $< -o $@
+	${CXX} ${CXXFLAGS} -c $< -o $@
 
 # C/C++ linker
 
