@@ -189,7 +189,7 @@ void show_usage() {
   GMessage("%s\n", USAGE);
   }
 
-int main(int argc, char * const argv[]) {
+int main(int argc, char* argv[]) {
 
 #ifdef HEAPROFILE
   if (!IsHeapProfilerRunning())
