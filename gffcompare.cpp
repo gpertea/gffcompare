@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.10.5"
+#define VERSION "0.10.6"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -41,26 +41,33 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     repeats must be soft-masked (lower case) in order to be able to classify\n\
     transfrags as repeats\n\
 \n\
+ -T do not generate .tmap and .refmap files for each input file\n\
  -e max. distance (range) allowed from free ends of terminal exons of\n\
     reference transcripts when assessing exon accuracy (100)\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
+ -V verbose processing mode (also shows GFF parser warnings)\n\
+ -D (debug mode) enables -V and generates additional files: \n\
+    <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
+\n\
+Options for the annotated/combined GTF output file:\n\
  -p the name prefix to use for consensus transcripts in the \n\
     <outprefix>.combined.gtf file (default: 'TCONS')\n\
- -C discard the \"contained\" transfrags in the .combined.gtf\n\
+ -C discard the \"contained\" transfrags in the GTF output\n\
     (i.e. collapse intron-redundant transfrags across all query files)\n\
- -A like -C but will not discard intron-redundant transfrags if they start\n\
-    on a different 5' exon (keep alternate TSS)\n\
+ -A like -C but does not discard intron-redundant transfrags if they start\n\
+    with a different 5' exon (keep alternate TSS)\n\
  -X like -C but also discard contained transfrags if transfrag ends stick out\n\
     within the container's introns\n\
  -K for -C/-A/-X, do NOT discard any redundant transfrag matching a reference\n\
- -T do not generate .tmap and .refmap files for each input file\n\
- -V verbose processing mode (also shows GFF parser warnings)\n\
- \n\
- -D (debug mode) enables -V and generates additional files: \n\
-    <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
+ --gids     : append related reference gene_id values to gene_id\n\
+ --gidnames : append related reference gene_name values to gene_id\n\
+     Note: --gids and --gidnames options are mutually exclusive!\n\
+ --gnames   : make gene_name include reference gene_name values, if any\n\
 "
+// --gff      : output GFF3 instead of GTF
+
 bool debug=false;
-bool perContigStats=false; // -S to enable stats for every single contig
+bool perContigStats=false; // -S to enable separate stats for every contig/chromosome
 //bool generic_GFF=false;
 //true if -G: won't discard intron-redundant transfrags
 bool discardRedundant=false; //activated by -C, -A or -X
@@ -73,6 +80,13 @@ bool reduceRefs=false; //-R
 bool reduceQrys=false; //-Q
 bool checkFasta=false;
 bool tmapFiles=true;
+//ref gene_id or gene_name values are separated by '|' (pipe character) when
+//appended to the original gene_id
+//gene_name values are separated by ',' (comma) in the gene_name attribute
+bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_names
+bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
+bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
+
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
@@ -179,6 +193,7 @@ int cmpGTrackByName(const pointer p1, const pointer p2) {
  return strcmp(((GSeqTrack*)p1)->gseq_name, ((GSeqTrack*)p2)->gseq_name);
 }
 
+
 void show_version() {
   GMessage("gffcompare v%s\n", VERSION);
 }
@@ -189,14 +204,22 @@ void show_usage() {
   GMessage("%s\n", USAGE);
   }
 
-int main(int argc, char* argv[]) {
+void RefReqCheck(bool v, const char* opt) {
+	if (v)
+		GError("%s\nError: option %s requires reference annotation (-r)\n",
+			USAGE, opt);
+}
 
+
+
+int main(int argc, char* argv[]) {
 #ifdef HEAPROFILE
   if (!IsHeapProfilerRunning())
       HeapProfilerStart("./gffcompare_dbg.hprof");
 #endif
 
-  GArgs args(argc, argv, "version;help;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
+  GArgs args(argc, argv,
+		  "version;help;gids;gidnames;gnames;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -215,6 +238,11 @@ int main(int argc, char* argv[]) {
   tmapFiles=(args.getOpt('T')==NULL);
   multiexon_only=(args.getOpt('M')!=NULL);
   multiexonrefs_only=(args.getOpt('N')!=NULL);
+  set_gene_name=(args.getOpt("gnames")!=NULL);
+  gid_add_ref_gids=(args.getOpt("gids")!=NULL);
+  gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
+  if (gid_add_ref_gids && gid_add_ref_gnames)
+	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt('S')!=NULL);
   checkFasta=(args.getOpt('J')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
@@ -258,13 +286,6 @@ int main(int argc, char* argv[]) {
 	  show_usage();
 	  exit(1);
   }
-  /*
-  if (numqryfiles>MAX_QFILES) {
-	  GMessage("Error: too many input files (limit set to %d at compile time)\n",MAX_QFILES);
-	  GMessage("(if you need to raise this limit set a new value for\nMAX_QFILES in gtf_tracking.h and recompile)\n");
-	  exit(0x5000);
-  }
-  */
   gfasta.init(args.getOpt('s'));
    // determine if -s points to a multi-fasta file or a directory
   //s=args.getOpt('c');
@@ -279,30 +300,25 @@ int main(int argc, char* argv[]) {
 
   s=args.getOpt('n');
   if (!s.is_empty()) loadRefDescr(s.chars());
+  reduceRefs=(args.getOpt('R')!=NULL);
+  reduceQrys=(args.getOpt('Q')!=NULL);
   s=args.getOpt('r');
-  if (!s.is_empty()) {
+  if (s.is_empty()) {
+	RefReqCheck(multiexonrefs_only, "-M");
+	RefReqCheck(reduceRefs, "-R");
+	RefReqCheck(reduceQrys, "-Q");
+	RefReqCheck(set_gene_name, "--gnames");
+	RefReqCheck(gid_add_ref_gids, "--gids");
+	RefReqCheck(gid_add_ref_gnames, "--gidnames");
+  } else { //reference annotation file provided
     f_ref=fopen(s,"r");
     if (f_ref==NULL) GError("Error opening reference gff: %s\n",s.chars());
     haveRefs=true;
     if (gtf_tracking_verbose) GMessage("Loading reference transcripts..\n");
     read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(), (multiexonrefs_only || multiexon_only));
     haveRefs=(ref_data.Count()>0);
-    reduceRefs=(args.getOpt('R')!=NULL);
-    reduceQrys=(args.getOpt('Q')!=NULL);
     //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
-    }
-  //int discard_redundant=0; //default: do not discard intron-redundant (contained) query transcripts
-
-  //showContained=(args.getOpt('C')==NULL); //true if -C NOT given
-  //so showContained is now true by default, all contained transfrags will be printed
-  //in the combined.gtf file, but those contained will have a "contained_in" attribute
-  /*
-   if (args.getOpt('E'))
-	   discard_redundant=1; //discard "redundant" query transcripts
-  if (args.getOpt('F'))
-    discard_redundant=2; // discard redundant qry transcripts only if they share
-      // the same 5' intron
-  */
+  }
   if (args.getOpt('C')) discardRedundant=true;
   if (args.getOpt('A')) {
 	  //redundancy check will NOT consider containment for alt. TSS
