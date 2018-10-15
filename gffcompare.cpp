@@ -1757,7 +1757,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			return 'o'; //just plain overlapping
 		}
 		//single-exon qry overlaping multi-exon ref
-		//special case: single-exon transfrag fully covering an intron (code 'f')
+		//TODO: special case: single-exon transfrag fully covering an intron (code 'f')
 		for (int j=0;j<=jmax;j++) {
 			//check if it's ~contained by an exon
 			int exovlen=mseg.overlapLen(r.exons[j]);
@@ -1829,6 +1829,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 	int imlast=-1;  //index of first intron match in query
 	int jmlast=-1;  //index of first intron match in reference
 	//check for intron matches
+	//TODO: keep track of intron retention! (code 'n')
 	while (i<=imax && j<=jmax) {
 		uint mstart=m.exons[i-1]->end;
 		uint mend=m.exons[i]->start;
