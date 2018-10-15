@@ -1757,6 +1757,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			return 'o'; //just plain overlapping
 		}
 		//single-exon qry overlaping multi-exon ref
+		//special case: single-exon transfrags fully covering an intron (code 'f')
 		for (int j=0;j<=jmax;j++) {
 			//check if it's ~contained by an exon
 			int exovlen=mseg.overlapLen(r.exons[j]);
@@ -1771,7 +1772,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			if (m.end<r.exons[j+1]->start && m.start>r.exons[j]->end)
 				return 'i';
 			// check if it's a potential pre-mRNA transcript
-			// (if overlaps an intron at least 10 bases)
+			// (if overlaps this intron at least 10 bases)
 			uint introvl=mseg.overlapLen(r.exons[j]->end+1, r.exons[j+1]->start-1);
 			//iovlen+=introvl;
 			if (introvl>=10 && mseg.len()>introvl+10) { rcode='e'; }
