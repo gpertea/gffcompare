@@ -1757,7 +1757,7 @@ char getOvlCode(GffObj& m, GffObj& r, int& ovlen) {
 			return 'o'; //just plain overlapping
 		}
 		//single-exon qry overlaping multi-exon ref
-		//special case: single-exon transfrags fully covering an intron (code 'f')
+		//special case: single-exon transfrag fully covering an intron (code 'f')
 		for (int j=0;j<=jmax;j++) {
 			//check if it's ~contained by an exon
 			int exovlen=mseg.overlapLen(r.exons[j]);
