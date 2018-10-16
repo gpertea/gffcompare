@@ -153,9 +153,9 @@ public:
 			case '=': return 0; //intron chain match
 			case 'c': return 2; //containment, perfect partial match (transfrag < reference)
 			case 'k': return 4; // reverse containment (reference < transfrag)
-			case 'n': return 6; // multi-exon transfrag with intron retention (fully covering a reference intron)
-			case 'j': return 8; // multi-exon transfrag with at least one junction match
-			case 'f': return 10; // single exon transfrag fully covering all reference introns(pre-mRNA/full intron retention)
+			case 'm': return 6; // full span overlap with all reference introns either matching or retained
+			case 'n': return 8; // partial overlap transfrag with at least one intron retention
+			case 'j': return 10; // multi-exon transfrag with at least one junction match
 			case 'e': return 12; // single exon transfrag partially overlapping an intron of reference (possible pre-mRNA fragment)
 			case 'o': return 14; // other generic exon overlap
 			case 's': return 16; //"shadow" - an intron overlaps with a ref intron on the opposite strand (wrong strand mapping?)
