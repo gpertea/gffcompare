@@ -392,18 +392,6 @@ int parse_mRNAs(GfList& mrnas,
 	return tredundant;
 }
 /*
-bool singleExonTMatch(GffObj& m, GffObj& n, int& ovlen) {
- //if (m.exons.Count()>1 || r.exons.Count()>1..)
- GSeg mseg(m.start, m.end);
- ovlen=mseg.overlapLen(n.start,n.end);
- // fuzz matching for single-exon transcripts:
- // overlap should be 80% of the length of the longer one
- if (m.covlen>n.covlen) {
-   return (ovlen >= m.covlen*0.8);
- } else
-   return (ovlen >= n.covlen*0.8);
-}
-*/
 bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
  //if (m.exons.Count()>1 || r.exons.Count()>1..)
  GSeg mseg(m.start, m.end);
@@ -417,7 +405,7 @@ bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
  } else
    return (ovlen >= r.covlen*0.8);
 }
-
+*/
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only) {
 	//strict intron chain match, or single-exon match
 	int imax=a.exons.Count()-1;

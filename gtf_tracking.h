@@ -9,9 +9,8 @@
 #include "gperftools/heap-profiler.h"
 #endif
 
-#include "gff.h"
+#include "t_classify.h"
 #include "GFaSeqGet.h"
-#include "GFastaIndex.h"
 #include "GStr.h"
 
 //#define MAX_QFILES 10000
@@ -148,27 +147,6 @@ class GLocus;
 
 class COvLink {
 public:
-	static int coderank(char c) {
-		switch (c) {
-			case '=': return 0; //intron chain match
-			case 'c': return 2; //containment, perfect partial match (transfrag < reference)
-			case 'k': return 4; // reverse containment (reference < transfrag)
-			case 'm': return 6; // full span overlap with all reference introns either matching or retained
-			case 'n': return 8; // partial overlap transfrag with at least one intron retention
-			case 'j': return 10; // multi-exon transfrag with at least one junction match
-			case 'e': return 12; // single exon transfrag partially overlapping an intron of reference (possible pre-mRNA fragment)
-			case 'o': return 14; // other generic exon overlap
-			case 's': return 16; //"shadow" - an intron overlaps with a ref intron on the opposite strand (wrong strand mapping?)
-			case 'x': return 18; // generic overlap on opposite strand (usually wrong strand mapping)
-			case 'i': return 20; // intra-intron (transfrag fully contained within a reference intron)
-			case 'y': return 30; // no exon overlap: ref exons fall within transfrag introns!
-			case 'p': return 90; //polymerase run
-			case 'r': return 92; //repeats
-			case 'u': return 94; //intergenic
-			case  0 : return 100;
-			 default: return 96;
-			}
-	}
     char code;
     int rank;
     GffObj* mrna;
@@ -177,7 +155,7 @@ public:
 		code=c;
 		mrna=m;
 		ovlen=ovl;
-		rank=coderank(c);
+		rank=classcode_rank(c);
 	}
     bool operator<(COvLink& b) {
 		if (rank==b.rank)
@@ -1352,7 +1330,8 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 
 void sort_GSeqs_byName(GList<GSeqData>& seqdata);
 
-bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
+//moved into t_classify.h
+//bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
 
 //strict intron chain match, or single-exon match
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false,

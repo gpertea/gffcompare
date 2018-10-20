@@ -4,7 +4,7 @@ GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
 
 INCDIRS := -I${GCLIB}
 
-BASEFLAGS  = -Wall -Wextra ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
+BASEFLAGS  = -Wall -Wextra ${INCDIRS} -std=c++11 -D_REENTRANT -fno-exceptions -fno-rtti
 
 GCCV8 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 8)
 ifeq "$(GCCV8)" "1"
@@ -57,25 +57,27 @@ endif
 LINKER    := g++
 
 OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
- ./gtf_tracking.o ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
+ ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
  ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
 .PHONY : all
-all:    gffcompare
-debug:  gffcompare
-release: gffcompare
-static: gffcompare
-memcheck: gffcompare
-memdebug: gffcompare
+all:    gffcompare trmap
+debug:  gffcompare trmap
+release: gffcompare trmap
+static: gffcompare trmap
+memcheck: gffcompare trmap
+memdebug: gffcompare trmap
 
 ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
 ./gffcompare.o : ./gtf_tracking.h
-gffcompare: ${OBJS} ./gffcompare.o
+
+gffcompare: ${OBJS} ./t_classify.o ./gtf_tracking.o ./gffcompare.o
+	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
+
+trmap: ${OBJS} ./t_classify.o ./GIntervalTree.o ./trmap.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
 .PHONY : clean
 clean:: 
-	@${RM} core core.* gffcompare gffcompare.exe ${OBJS} *.o* 
-
-
+	@${RM} core core.* gffcompare gffcompare.exe trmap trmap.exe ${OBJS} *.o* 
