@@ -59,12 +59,13 @@ Options for the annotated/combined GTF output file:\n\
  -X like -C but also discard contained transfrags if transfrag ends stick out\n\
     within the container's introns\n\
  -K for -C/-A/-X, do NOT discard any redundant transfrag matching a reference\n\
+"
+/*
  --gids     : append related reference gene_id values to gene_id\n\
  --gidnames : append related reference gene_name values to gene_id\n\
      Note: --gids and --gidnames options are mutually exclusive!\n\
  --gnames   : make gene_name include reference gene_name values, if any\n\
-"
-// --gff      : output GFF3 instead of GTF
+*/
 
 bool debug=false;
 bool perContigStats=false; // -S to enable separate stats for every contig/chromosome

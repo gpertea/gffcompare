@@ -3,15 +3,15 @@ ver=$(fgrep '#define VERSION ' gffcompare.cpp)
 ver=${ver#*\"}
 ver=${ver%%\"*}
 pack=gffcompare-$ver
-linpack=$pack.OSX_x86_64
-echo "preparing $linpack.tar.gz"
+macpack=$pack.OSX_x86_64
+echo "preparing $macpack.tar.gz"
 echo "-------------------"
-/bin/rm -rf $linpack
-/bin/rm -f $linpack.tar.gz
-mkdir $linpack
+/bin/rm -rf $macpack
+/bin/rm -f $macpack.tar.gz
+mkdir $macpack
 make clean
 make release
-cp LICENSE gffcompare $linpack/
-tar cvfz $linpack.tar.gz $linpack
-ls -l $linpack.tar.gz
-echo "scp $linpack.tar.gz  salz:~/html/software/stringtie/dl/"
+cp LICENSE README.md gffcompare trmap $macpack/
+tar cvfz $macpack.tar.gz $macpack
+ls -l $macpack.tar.gz
+echo "scp $macpack.tar.gz  salz:~/html/software/stringtie/dl/"
