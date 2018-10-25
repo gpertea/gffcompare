@@ -13,7 +13,7 @@ mkdir $linpack
 cd $srcpack
 make clean
 make release
-cp LICENSE gffcompare ../$linpack/
+cp LICENSE README.md gffcompare trmap ../$linpack/
 cd ..
 tar cvfz $linpack.tar.gz $linpack
 ls -l $srcpack.tar.gz $linpack.tar.gz
