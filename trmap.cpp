@@ -1,5 +1,4 @@
 #include <iostream>
-#include <unordered_map>
 
 #include <vector>
 #include <fstream>
@@ -11,6 +10,8 @@
 
 using std::cout;
 using std::endl;
+
+#define VERSION "0.10.6"
 
 bool simpleOvl=false;
 
@@ -35,7 +36,7 @@ int main(int argc, char* argv[]) {
 	}
 	if (args.getOpt('S')) simpleOvl=true;
 
-	std::unordered_map<std::string, GSTree> map_trees;
+	GHash<GSTree> map_trees;
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
 
@@ -56,11 +57,16 @@ int main(int argc, char* argv[]) {
 	GffObj* t=NULL;
 	GPVec<GffObj> toFree(true);
 	while ((t=myR.readNext())!=NULL) {
+		GSTree* cTree=map_trees[t->getGSeqName()];
+		if (cTree==NULL) {
+			cTree=new GSTree();
+			map_trees.Add(t->getGSeqName(), cTree);
+		}
 		if (t->strand=='+')
-		 map_trees[t->getGSeqName()].it[1].Insert(t);
+		 cTree->it[1].Insert(t);
 		else if (t->strand=='-')
-			map_trees[t->getGSeqName()].it[2].Insert(t);
-		else map_trees[t->getGSeqName()].it[0].Insert(t);
+			cTree->it[2].Insert(t);
+		else cTree->it[0].Insert(t);
 		toFree.Add(t);
 	}
 	FILE* outFH=NULL;
@@ -85,7 +91,9 @@ int main(int argc, char* argv[]) {
 	//	GffObj* t=myQ.gflst[i];
 	t=NULL;
 	while ((t=myQ.readNext())!=NULL) {
-		if (map_trees.count(t->getGSeqName())==0) continue;
+		//if (map_trees.count(t->getGSeqName())==0) continue;
+		const char* gseq=t->getGSeqName();
+		if (!map_trees.hasKey(gseq)) continue;
 		GVec<int> sidx;
 		int v=0;
 		sidx.Add(v); //always search the '.' strand
@@ -93,10 +101,10 @@ int main(int argc, char* argv[]) {
 		else if (t->strand=='-') { v=2; sidx.Add(v); }
 		else { v=1; sidx.Add(v); v=2; sidx.Add(v); }
 		for (int k=0;k<sidx.Count();++k) {
-			TemplateStack<GSeg*> * enu = map_trees.at(t->getGSeqName()).it[sidx[k]].Enumerate(t->start, t->end);
+			TemplateStack<GSeg*> * enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
 			if(enu->Size()!=0) {
 				if (simpleOvl) {
-					fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
+					fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
 					for (int i=0; i<enu->Size(); ++i) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
 						GffObj* r=(GffObj*)((*enu)[i]);

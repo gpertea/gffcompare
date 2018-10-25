@@ -7,13 +7,6 @@ INCDIRS := -I${GCLIB}
 BASEFLAGS  = -Wall -Wextra ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
 
 GCCV8 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 8)
-USEC11 := $(shell expr `g++ -dumpversion | cut -f1,2 -d.` \>= 4.8)
-ifeq "$(USEC11)" "1"
-  BASEFLAGS := -std=c++11 $(BASEFLAGS)
-else
-  BASEFLAGS := -std=c++0x $(BASEFLAGS)
-endif
-
 ifeq "$(GCCV8)" "1"
  BASEFLAGS += -Wno-class-memaccess
 endif
