@@ -1,6 +1,5 @@
 #include <iostream>
 
-#include <vector>
 #include <fstream>
 #include <sstream>
 
@@ -9,7 +8,6 @@
 #include "GIntervalTree.h"
 
 using std::cout;
-using std::endl;
 
 #define VERSION "0.10.6"
 
@@ -20,17 +18,19 @@ struct GSTree {
 };
 
 int main(int argc, char* argv[]) {
-	const std::string usage = std::string("Usage:\ntrmap [-S] [-o <outfile>] <ref_gff> <query_gff>\n")+
-	        "Transcript to reference mapping and overlap classifier.\nPositional arguments:\n"+
-			"  <ref_gff>    reference file name in GFF/BED format\n"+
-			"  <query_gff>  query file name in GFF/BED format or \"-\" for stdin\n"+
+	const std::string usage = std::string("trmap v" VERSION)+
+	" : transcript to reference mapping and overlap classifier.\nUsage:\n"+
+	"  trmap [-S] [-o <outfile>] <ref_gff> <query_gff>\n"+
+	        "Positional arguments:\n"+
+			"  <ref_gff>    reference annotation file name (GFF/BED format)\n"+
+			"  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"+
 			"Options:\n"+
 			"  -o <outfile> write output to <outfile> instead of stdout\n"+
-			"  -S           report simple interval overlaps (one line per query), \n"+
-			"               without classification, showing target coverage percentage\n";
-	GArgs args(argc, argv, "hSo:");
+			"  -S           report only simple reference overlap percentages, without\n"+
+			"               classification (one line per query)\n";
+	GArgs args(argc, argv, "help:hSo:");
 	args.printError(usage.c_str(), true);
-	if (args.getOpt('h')) {
+	if (args.getOpt('h') || args.getOpt("help")) {
 		cout << usage;
 		exit(EXIT_SUCCESS);
 	}

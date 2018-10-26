@@ -1,5 +1,3 @@
-#GCLIB := ../gclib
-
 GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
 
 INCDIRS := -I${GCLIB}
@@ -17,8 +15,6 @@ LINKER  := $(if $(LINKER),$(LINKER),g++)
 LDFLAGS := $(if $(LDFLAGS),$(LDFLAGS),-g)
 
 CXXFLAGS := $(if $(CXXFLAGS),$(BASEFLAGS) $(CXXFLAGS),$(BASEFLAGS))
-
-#
 
 ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
   # -- release build
