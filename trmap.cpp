@@ -20,7 +20,7 @@ struct GSTree {
 };
 
 int main(int argc, char* argv[]) {
-	const std::string usage = std::string("Usage: tclass [-S] [-o <outfile>] <ref_gff> <query_gff>\n")+
+	const std::string usage = std::string("Usage:\ntrmap [-S] [-o <outfile>] <ref_gff> <query_gff>\n")+
 	        "Transcript to reference mapping and overlap classifier.\nPositional arguments:\n"+
 			"  <ref_gff>    reference file name in GFF/BED format\n"+
 			"  <query_gff>  query file name in GFF/BED format or \"-\" for stdin\n"+
