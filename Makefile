@@ -68,10 +68,10 @@ ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
 ./gffcompare.o : ./gtf_tracking.h
 
-gffcompare: ${OBJS} ./t_classify.o ./gtf_tracking.o ./gffcompare.o
+gffcompare: ${OBJS} ./gtf_tracking.o ./gffcompare.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
-trmap: ${OBJS} ./t_classify.o ./GIntervalTree.o ./trmap.o
+trmap: ${OBJS} ./GIntervalTree.o ./trmap.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
 .PHONY : clean

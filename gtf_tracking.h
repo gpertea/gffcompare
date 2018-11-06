@@ -9,7 +9,7 @@
 #include "gperftools/heap-profiler.h"
 #endif
 
-#include "t_classify.h"
+#include "gff.h"
 #include "GFaSeqGet.h"
 #include "GStr.h"
 
@@ -1330,7 +1330,7 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 
 void sort_GSeqs_byName(GList<GSeqData>& seqdata);
 
-//moved into t_classify.h
+//moved into gff.h
 //bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
 
 //strict intron chain match, or single-exon match

@@ -3,8 +3,8 @@
 #include <fstream>
 #include <sstream>
 
-#include "t_classify.h"
 #include "GArgs.h"
+#include "gff.h"
 #include "GIntervalTree.h"
 
 using std::cout;

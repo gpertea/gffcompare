@@ -10,7 +10,7 @@ echo "------------------------------------"
 mkdir $pack
 mkdir $pack/gclib
 libdir=$pack/gclib/
-cp LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} t_classify.{h,cpp} \
+cp LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} \
  GIntervalTree.{h,cpp} TStack.hh trmap.cpp $pack/
 sed 's|\.\./gclib|./gclib|' Makefile > $pack/Makefile
 cp ../gclib/{GVec,GList,GHash}.hh $libdir
