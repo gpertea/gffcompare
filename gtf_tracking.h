@@ -16,7 +16,7 @@
 //#define MAX_QFILES 10000
 extern int numQryFiles;
 extern bool gtf_tracking_verbose;
-
+extern bool keepUnstrandedRefs;
 extern bool gtf_tracking_largeScale;
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
@@ -842,10 +842,12 @@ public:
     const char* gseq_name;
     GList<GffObj> refs_f; //forward strand mRNAs
     GList<GffObj> refs_r; //reverse strand mRNAs
+    GList<GffObj> refs_u; //when -U option is used, consider unstranded "reference" transcripts
 	GList<GffObj> mrnas_f; //forward strand mRNAs
 	GList<GffObj> mrnas_r; //reverse strand mRNAs
 	GList<GLocus> loci_f; //forward strand loci
 	GList<GLocus> loci_r; //reverse strand loci
+	GList<GLocus> loci_u; //undetermined strand loci (for -U option only)
 	//--> the fields below are not used by reference data --
 	GList<GSuperLocus> gstats_f; //stats for forward strand superloci
 	GList<GSuperLocus> gstats_r; //stats for reverse strand superloci
@@ -860,7 +862,7 @@ public:
 
 	//--<
 	GSeqData(int gid=-1):mrnas_f(true,true,false),mrnas_r(true,true,false),
-	loci_f(true,true,true),loci_r(true,true,true),
+	loci_f(true,true,true),loci_r(true,true,true),loci_u(true,true,true),
 	gstats_f(true,true,false),gstats_r(true,true,false),
 	nloci_f(true,false,true), nloci_r(true,false,true),
 	umrnas(true,true,false), nloci_u(true,true,true), tdata(false,true,false) {

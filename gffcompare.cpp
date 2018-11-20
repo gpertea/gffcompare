@@ -35,6 +35,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     (Warning: this will discard all \"novel\" loci!)\n\
  -M discard (ignore) single-exon transfrags and reference transcripts\n\
  -N discard (ignore) single-exon reference transcripts\n\
+ -U for -r, do not discard unstranded reference transcripts\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\
@@ -245,6 +246,7 @@ int main(int argc, char* argv[]) {
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt('S')!=NULL);
+  keepUnstrandedRefs=(args.getOpt('U')!=NULL);
   checkFasta=(args.getOpt('J')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
   FILE* finlst=NULL;
