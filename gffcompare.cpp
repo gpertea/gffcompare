@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.10.6"
+#define VERSION "0.10.8"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -1244,6 +1244,10 @@ void tssCluster(GXLocus& xloc)
         //processTssCl(xcds_num, xpcls[l], faseq);
     }
 }
+/*
+char* getProteinSequence(GffObj* s, int& plen) {
+
+}
 
 void protCluster(GXLocus& xloc, GFaSeqGet *faseq) {
   if (!faseq)
@@ -1255,7 +1259,7 @@ void protCluster(GXLocus& xloc, GFaSeqGet *faseq) {
     if (c->refcode!='=') continue;
     //get the CDS translation here
     if (c->aa==NULL) {
-       c->aa=c->ref->getSplicedTr(faseq, true, &c->aalen);
+       c->aa=getProteinSequence(c->ref, &c->aalen);
        if (c->aalen>0 && c->aa[c->aalen-1]=='.') {
              //discard the final stop codon
              c->aalen--;
@@ -1293,14 +1297,14 @@ void protCluster(GXLocus& xloc, GFaSeqGet *faseq) {
    if (c->aa!=NULL) { GFREE(c->aa); }
    }
 }
-
-void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, GFaSeqGet *faseq, FILE* fr=NULL) {
+*/
+void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, /* GFaSeqGet *faseq, */ FILE* fr=NULL) {
 	for (int l=0;l<xloci.Count();l++) {
 		if (xloci[l]->qloci.Count()==0) continue;
 		GXLocus& xloc=*(xloci[l]);
 		xloc.checkContainment(keepAltTSS, allowIntronSticking);
 		tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
-		protCluster(xloc,faseq);
+		//protCluster(xloc,faseq);
 		for (int c=0;c<xloc.tcons.Count();c++) {
 			if (discardRedundant && xloc.tcons[c]->contained!=NULL) {
 				if (!(keepRefMatching && xloc.tcons[c]->refcode=='='))
@@ -2589,9 +2593,9 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
          }
     //print XLoci and XConsensi within each xlocus
     //also TSS clustering and protein ID assignment for XConsensi
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, faseq, fredundant);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, faseq, fredundant);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, fredundant); //faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, fredundant); //faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, fredundant); //faseq, fredundant);
     if (tmapFiles && haveRefs) {
       printRefMap(frs, qcount, gseqtrack.rloci_f);
       printRefMap(frs, qcount, gseqtrack.rloci_r);

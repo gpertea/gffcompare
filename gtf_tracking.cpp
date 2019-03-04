@@ -202,7 +202,7 @@ bool betterTDup(GffObj* a, GffObj* b) {
     return (a->exons.Count()>b->exons.Count());
   if (a->hasCDS()!=b->hasCDS())
      return (a->hasCDS()>b->hasCDS());
-   //for annotation purposes, it's more important to keep the 
+   //for annotation purposes, it's more important to keep the
    //longer transcript, instead of the one that was loaded first
   if (a->covlen != b->covlen)
          return (a->covlen > b->covlen);
@@ -223,7 +223,7 @@ int parse_mRNAs(GfList& mrnas,
 		GSeqData* gdata=NULL;
 		uint tlen=m->len();
 		if (m->hasErrors() || (tlen+500>GFF_MAX_LOCUS)) { //should probably report these in a file too..
-			if (gtf_tracking_verbose) 
+			if (gtf_tracking_verbose)
 			      GMessage("Warning: transcript %s discarded (structural errors found, length=%d).\n", m->getID(), tlen);
 			continue;
 			}
@@ -310,13 +310,13 @@ int parse_mRNAs(GfList& mrnas,
 				 total_kept--;
 				 if (betterTDup(rp, m)) {
 					if (gtf_tracking_verbose)
-					   GMessage("Query transcript %s discarded (duplicate of %s)\n", 
+					   GMessage("Query transcript %s discarded (duplicate of %s)\n",
 					      m->getID(), rp->getID() );
 					continue;
 				 }
 				 else {
 					if (gtf_tracking_verbose)
-					   GMessage("Query transcript %s discarded (duplicate of %s)\n", 
+					   GMessage("Query transcript %s discarded (duplicate of %s)\n",
 					      rp->getID(), m->getID() );
 					 ((CTData*)(rp->uptr))->mrna=NULL;
 					 rp->isUsed(false);
@@ -325,9 +325,9 @@ int parse_mRNAs(GfList& mrnas,
 				 }
 			 }
 		   }// redundant transfrag check
-		   if (m->gscore==0.0)
+		   /* if (m->gscore==0.0)
 		     m->gscore=m->exons[0]->score; //Cufflinks exon score = isoform abundance
-
+           */
 
 		   const char* expr = m->getAttr("FPKM");
 		   if (expr!=NULL) {
@@ -345,7 +345,7 @@ int parse_mRNAs(GfList& mrnas,
 		   //const char* scov=(gtf_tracking_largeScale) ? m->getAttr("cov") : m->exons[0]->getAttr(m->names,"cov");
 		   const char* scov=m->getAttr("cov");
 		   if (scov!=NULL) {
-		       if (scov[0]=='"') scov++; 
+		       if (scov[0]=='"') scov++;
 		       cov=strtod(scov, NULL);
 		       }
 		   //const char* sconf_hi=(gtf_tracking_largeScale) ? m->getAttr("conf_hi") : m->exons[0]->getAttr(m->names,"conf_hi");
@@ -441,7 +441,7 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only)
 		}
 	}
 	if (contain_only) //requires actual coordinate containing
-		     return ((a.start>=b.start && a.end<=b.end) || 
+		     return ((a.start>=b.start && a.end<=b.end) ||
 		           (b.start>=a.start && b.end<=a.end));
 		else return true;
 }
@@ -533,7 +533,7 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 					CTData* mdata=(CTData*)seqdata.umrnas[j]->uptr;
 					mdata->addOvl('i',rdata->mrnas_r[i]);
 				}
-				
+
 			}
 		}
 	}//we have reference transcripts
@@ -606,7 +606,7 @@ GSeqData* getRefData(int gid, GList<GSeqData>& ref_data) {
 	return r;
 }
 
-void read_transcripts(FILE* f, GList<GSeqData>& seqdata, 
+void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 #ifdef CUFFLINKS
   boost::crc_32_type& crc_result,
 #endif
@@ -614,9 +614,10 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 	rewind(f);
 	GffReader gffr(f, true); //loading only recognizable transcript features
 	gffr.showWarnings(gtf_tracking_verbose);
-
 	//          keepAttrs    mergeCloseExons   noExonAttrs
-	gffr.readAll(keepAttrs,          true,        true);
+	gffr.keepingAttrs(keepAttrs, true);
+    gffr.mergingCloseExons(true);
+	gffr.readAll();
 #ifdef CUFFLINKS
      crc_result = gffr.current_crc_result();
 #endif
@@ -647,8 +648,11 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	                          //(f, transcripts_only)
 	GffReader* gffr=new GffReader(f, true); //load only transcript annotations
 	gffr->showWarnings(gtf_tracking_verbose);
-	//            keepAttrs   mergeCloseExons   noExonAttrs
-	gffr->readAll(!isRefData,          true,        isRefData || gtf_tracking_largeScale);
+	//            keepAttrs=!isRefData,   mergeCloseExons   noExonAttrs=(isRefData || gtf_tracking_largeScale)
+	gffr->mergingCloseExons(true);
+	gffr->keepingAttrs(!isRefData, isRefData || gtf_tracking_largeScale );
+	gffr->readAll();
+	//gffr->readAll(!isRefData,          true,        isRefData || gtf_tracking_largeScale);
 	//so it will read exon attributes only for low number of Cufflinks files
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
@@ -673,7 +677,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_del_gffr");
 #endif
-	
+
 	//for each genomic sequence, cluster transcripts
 	int oriented_by_overlap=0;
 	int initial_unoriented=0;
