@@ -42,6 +42,9 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transfrags as repeats\n\
 \n\
  -T do not generate .tmap and .refmap files for each input file\n\
+ --qdup (stricter duplicate checking) do not discard matching query\n\
+      transcripts within a sample unless their boundaries are also fully\n\
+       contained within other, larger or identical transcript\n\
  -e max. distance (range) allowed from free ends of terminal exons of\n\
     reference transcripts when assessing exon accuracy (100)\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
@@ -87,6 +90,8 @@ bool tmapFiles=true;
 bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_names
 bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
+
+bool qDupStrict=false;
 
 bool only_spliced_refs=false;
 int debugCounter=0;
@@ -220,7 +225,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;gids;gidnames;gnames;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
+		  "version;help;gids;gidnames;gnames;qdup;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -242,6 +247,7 @@ int main(int argc, char* argv[]) {
   set_gene_name=(args.getOpt("gnames")!=NULL);
   gid_add_ref_gids=(args.getOpt("gids")!=NULL);
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
+  qDupStrict=(args.getOpt("qdup")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt('S')!=NULL);

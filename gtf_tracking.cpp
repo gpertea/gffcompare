@@ -25,7 +25,7 @@ bool betterRef(GffObj* a, GffObj* b) {
      }
  }
 
-GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool isRef=false) {
+GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool strictMatch=false) {
  //mrnas MUST be sorted by start coordinate
  //this is optimized for when mrnas list is being populated, in sorted order
  //as it starts scanning from the end of the list
@@ -44,7 +44,7 @@ GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool isRef=false) 
            }
       if (omrna.start>m->end) continue; //this should never be the case if nidx was found with qsearch_mrnas(m->end)
       //locus overlap here:
-      if (tMatch(*m, omrna, ovlen, !isRef, isRef)) {
+      if (tMatch(*m, omrna, ovlen, !strictMatch, strictMatch)) {
              dupidx=i;
              return mrnas[i];
              }
@@ -242,15 +242,15 @@ int parse_mRNAs(GfList& mrnas,
 			}
 
 		if (m->exons.Count()==0) {
-				if (gtf_tracking_verbose && !is_ref_set)
-				 GMessage("Warning: %s %s found without exon segments (adding default exon).\n",m->getFeatureName(), m->getID());
-				m->addExon(m->start,m->end);
-				}
+			if (gtf_tracking_verbose && !is_ref_set)
+			    GMessage("Warning: %s %s found without exon segments (adding default exon).\n",m->getFeatureName(), m->getID());
+			m->addExon(m->start,m->end);
+		}
 		if (glstdata.Found(&f,i)) gdata=glstdata[i];
 		else {
 			gdata=new GSeqData(m->gseq_id);
 			glstdata.Add(gdata);
-			}
+		}
 
 		double fpkm=0;
 		double cov=0;
@@ -263,7 +263,7 @@ int parse_mRNAs(GfList& mrnas,
 			 if (gtf_tracking_verbose)
 				 GMessage("Warning: reference transcript %s has undetermined strand, discarded.\n");
 		     continue;
-		     }
+		   }
 		   total_kept++;
 		   target_mrnas=(m->strand=='+') ? &(gdata->mrnas_f) : &(gdata->mrnas_r);
 		   if (discardDups) {
@@ -303,7 +303,7 @@ int parse_mRNAs(GfList& mrnas,
 		   // discard duplicate sample transfrags (but will also check for redundancy at the end)
 		   if (discardDups) { //check for a redundant transfrag already loaded
 			 int rpidx=-1;
-			 GffObj* rp= is_TDup(m, *target_mrnas, rpidx);
+			 GffObj* rp= is_TDup(m, *target_mrnas, rpidx, qDupStrict);
 			 if (rp!=NULL) {
 				 //always discard the shorter transfrag
 				 tredundant++;
@@ -391,22 +391,9 @@ int parse_mRNAs(GfList& mrnas,
 	*/
 	return tredundant;
 }
-/*
-bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen) {
- //if (m.exons.Count()>1 || r.exons.Count()>1..)
- GSeg mseg(m.start, m.end);
- ovlen=mseg.overlapLen(r.start,r.end);
- // fuzzy matching for single-exon transcripts:
- // overlap should be 80% of the length of the longer one
- if (m.covlen>r.covlen) {
-   return ( (ovlen >= m.covlen*0.8) ||
-		   (ovlen >= r.covlen*0.8 && ovlen >= m.covlen* 0.7 ));
-		   //allow also some fuzzy reverse containment
- } else
-   return (ovlen >= r.covlen*0.8);
-}
-*/
-bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only) {
+
+
+bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool contain_only) {
 	//strict intron chain match, or single-exon match
 	int imax=a.exons.Count()-1;
 	int jmax=b.exons.Count()-1;
@@ -418,13 +405,14 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl, bool contain_only)
 		   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
 		           (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.8));
 		}
-		if (fuzzunspl) {
+		if (relaxed_singleExonMatch) {
 			return (singleExonTMatch(a,b,ovlen));
 		} else {
-			//only perfect coordinate match
-			ovlen=a.covlen;
-			return (a.exons[0]->start==b.exons[0]->start &&
-					a.exons[0]->end==b.exons[0]->end);
+			//same as contain_only, but stricter (at least 90% larger transcript coverage)
+			return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.9) ||
+			        (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.9));
+			//return (a.exons[0]->start==b.exons[0]->start &&
+			//		a.exons[0]->end==b.exons[0]->end);
 		}
 	}
 	if ( a.exons[imax]->start<b.exons[0]->end ||
