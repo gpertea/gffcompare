@@ -18,7 +18,7 @@ The overall functionality and most of the options of CuffCompare are
 still supported by GffCompare, while new functionality is being added to
 GffCompare only, as it is the program which is actively maintained.
 
-An example of a new feature of GffCompare (compare to its predecessor
+An example of a new feature of GffCompare (compared to its predecessor
 CuffCompare) is this: when a single query GTF/GFF file is given as input
 for analysis, along with a reference annotation (-r option), GffCompare
 switches into *annotation mode* and it generates a *.annotated.gtf* file
@@ -29,7 +29,7 @@ their relationship with the matching/overlapping reference transcript),
 but the original transcript IDs are preserved, so GffCompare can thus be
 used as a simple way of annotating a set of transcripts.
 
-Another important difference is that the input transcripts are by default no longer discarded when they are found to be "intron redundant", i.e. contained within other, longer isoforms. CuffCompare had the -G option to prevent collapsing of such intron redundant isoforms into their longer "containers", but GffCompare has made this the default mode of operation (hence the -G option is no longer needed and is simply ignored when given). However please note that transcripts with fully redundant intron chains (i.e. with the same exact intron coordinates, hence the same intron-exon structure except the terminal exon ends) are *still* discarded when GTF/GFF files are loaded
+Another important difference is that the input transcripts are by default no longer discarded when they are found to be "intron redundant", i.e. contained within other, longer isoforms. CuffCompare had the -G option to prevent collapsing of such intron redundant isoforms into their longer "containers", but GffCompare has made this the default mode of operation (hence the -G option is no longer needed and is simply ignored when given). However please note that "matching" transcripts with fully identical intron chains (i.e. with the same exact intron coordinates, hence the same intron-exon structure except the terminal exon ends) are *still* discarded when GTF/GFF files are loaded.
 
 # trmap
 Some pipelines can produce a very large number of potential or partial transcripts ("transfrags"), for example when merging the transcript assemblies from tens or hundreds of RNA-Seq experiments assemblies with `stringtie --merge`. Running GffCompare on such large GTF/GFF files could be slow and memory intensive (because GffCompare always loads the whole transcript data in memory for clustering and other analysis). One may only be interested to know _if_ and _how_ these many transcripts overlap the reference annotation, and further analyze only those which have specific types of overlap with the reference annotation transcripts (or none at all, i.e. if they do not overlap any of it, which may be the case for putative _novel_ transcripts). 
