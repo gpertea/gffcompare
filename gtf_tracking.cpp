@@ -603,8 +603,8 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 	GffReader gffr(f, true); //loading only recognizable transcript features
 	gffr.showWarnings(gtf_tracking_verbose);
 	//          keepAttrs    mergeCloseExons   noExonAttrs
-	gffr.keepingAttrs(keepAttrs, true);
-    gffr.mergingCloseExons(true);
+	gffr.keepAttrs(keepAttrs, true);
+	gffr.mergeCloseExons(true);
 	gffr.readAll();
 #ifdef CUFFLINKS
      crc_result = gffr.current_crc_result();
@@ -637,8 +637,8 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	GffReader* gffr=new GffReader(f, true); //load only transcript annotations
 	gffr->showWarnings(gtf_tracking_verbose);
 	//            keepAttrs=!isRefData,   mergeCloseExons   noExonAttrs=(isRefData || gtf_tracking_largeScale)
-	gffr->mergingCloseExons(true);
-	gffr->keepingAttrs(!isRefData, isRefData || gtf_tracking_largeScale );
+	gffr->mergeCloseExons(true);
+	gffr->keepAttrs(!isRefData, isRefData || gtf_tracking_largeScale );
 	gffr->readAll();
 	//gffr->readAll(!isRefData,          true,        isRefData || gtf_tracking_largeScale);
 	//so it will read exon attributes only for low number of Cufflinks files
