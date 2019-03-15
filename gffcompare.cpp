@@ -453,8 +453,6 @@ int main(int argc, char* argv[]) {
     }
     GList<GSeqData>* pdata=new GList<GSeqData>(true,true,true);
     qrysdata[fi]=pdata;
-    if (gtf_tracking_verbose)
-       GMessage("Loading transcripts from query file: %s..\n",in_file.chars());
     //int discard_check=discard_redundant;
     //if (keepRefMatching) {
     //  discard_check=0;
@@ -822,7 +820,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 	  uint istart=super->qmrnas[i]->exons.First()->start;
 	  uint iend=super->qmrnas[i]->exons.Last()->end;
 	  for (int j=0;j<super->rmrnas.Count();j++) {
-		  if (matched_refs[j]) continue; //already counted a TP here
+		  if (matched_refs[j]>0) continue; //already counted a TP here
 		  uint jstart=super->rmrnas[j]->exons.First()->start;
 		  uint jend=super->rmrnas[j]->exons.Last()->end;
 		  if (iend<jstart) break;
@@ -837,7 +835,8 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 		  if (tMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, true)) {
 			  super->qmrnas[i]->udata|=2;
 			  matched_refs[j]++;
-			  //fprintf(stderr, "%s\n", super->qmrnas[i]->getID()); //DEBUG ONLY
+			  //fprintf(stderr, "%s (%c) tMatched %s (%c)\n", super->qmrnas[i]->getID(),
+			  //  super->qmrnas[i]->strand, super->rmrnas[j]->getID(), super->rmrnas[j]->strand); //DEBUG ONLY
 			  super->mrnaTP++;
 			  qlocus->mrnaTP++;
 			  rlocus->mrnaTP++;
@@ -1755,7 +1754,7 @@ for (int q=0;q<qcount-1;q++) { //for each qry dataset
     CTData* qi_d=(CTData*)qi_t->uptr;
     if (qi_d->eqlist!=NULL && qi_t->exons.Count()>1) {
          continue; //this is part of an EQ chain already
-         }
+    }
     for (int n=q+1;n<qcount;n++) { // for every successor dataset
        if (loctrack[n]==NULL) continue;
        for (int ni=0;ni<loctrack[n]->Count();ni++) {
@@ -1942,53 +1941,49 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 
 
 void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
- //requires loctrack to be already populated with overlapping qloci by findTMatches()
-  // which also found (and tagged) all matching qry transcripts
- for (int q=0;q<qcount;q++) { //for each qry dataset
-  if (loctrack[q]==NULL) continue;
-  for (int qi=0;qi<loctrack[q]->Count();qi++) { // for each transcript in q dataset
-    //if (loctrack[q]->cl[qi]->exons.Count()<2) continue; //skip single-exon transcripts
-    GffObj& qt=*(loctrack[q]->Get(qi));
-    CTData* qtdata=(CTData*)qt.uptr;
-    GffObj* rmatch=NULL; //== ref match for this row
-    int rovlen=0;
-    //if (qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0)) {
-    if (qtdata->eqhead) {
-        //EQ chain head -- transfrag equivalency list starts here
-        if (qtdata->eqref==NULL) { //find rloc overlap
-           if (qt.overlap(rloc.start, rloc.end)) {
-                 rmatch=findRefMatch(qt, rloc, rovlen);
-                 }
-           } else rmatch=qtdata->eqref;
-       if (rmatch!=NULL) {
-    	   //assign the same refmatch to all
-          for (int k=0;k<qtdata->eqlist->Count();k++) {
-            GffObj* m=qtdata->eqlist->Get(k);
-            ((CTData*)m->uptr)->addOvl('=',rmatch,rovlen);
-            continue;
-            }
-         }
-        //if (rmatch!=NULL) continue;
-        } //equivalence class (chain of intron-matching)
-    //if ((qtdata->eqdata & EQCHAIN_TAGMASK)!=0) continue; //part of a matching chain, dealt with previously
-
-    //--------- qry mrna not in a '=' matching clique
-    if (qtdata->eqref==NULL) { //find any rloc overlap -- class code
-       if (qt.overlap(rloc.start, rloc.end)) {
-          rmatch=findRefMatch(qt, rloc, rovlen);
-          if (rmatch==NULL &&
-               ((CTData*)qt.uptr)->ovls.Count()==0) {
-            //not an ichain match, look for other codes
-            GffObj* rovl=NULL;
-            int rovlen=0;
-            //char ovlcode=
-            getRefOvl(qt, rloc,rovl,rovlen);
-            }
-          }
-       }
-     else rmatch=qtdata->eqref;
-    } //for each qry transcript
-  }//for each qry dataset
+	//requires loctrack to be already populated with overlapping qloci by findTMatches()
+	// which also found (and tagged) all matching qry transcripts
+	for (int q=0;q<qcount;q++) { //for each qry dataset
+		if (loctrack[q]==NULL) continue;
+		for (int qi=0;qi<loctrack[q]->Count();qi++) { // for each transcript in q dataset
+			//if (loctrack[q]->cl[qi]->exons.Count()<2) continue; //skip single-exon transcripts
+			GffObj& qt=*(loctrack[q]->Get(qi));
+			CTData* qtdata=(CTData*)qt.uptr;
+			GffObj* rmatch=NULL; //== ref match for this row
+			int rovlen=0;
+			//if (qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0)) {
+			if (qtdata->eqhead) {
+				//EQ chain head -- transfrag equivalency list starts here
+				if (qtdata->eqref==NULL) { //find rloc overlap
+					if (qt.overlap(rloc.start, rloc.end)) {
+						rmatch=findRefMatch(qt, rloc, rovlen);
+					}
+				} else rmatch=qtdata->eqref;
+				if (rmatch!=NULL) {
+					//assign the same refmatch to all
+					for (int k=0;k<qtdata->eqlist->Count();k++) {
+						GffObj* m=qtdata->eqlist->Get(k);
+						((CTData*)m->uptr)->addOvl('=',rmatch,rovlen);
+						continue;
+					}
+				}
+				//if (rmatch!=NULL) continue;
+			} //equivalence class (chain of intron-matching)
+			//if ((qtdata->eqdata & EQCHAIN_TAGMASK)!=0) continue; //part of a matching chain, dealt with previously
+			//--------- qry mrna not in a '=' matching clique
+			if (qtdata->eqref==NULL) { //find any rloc overlap -- class code
+				if (qt.overlap(rloc.start, rloc.end)) {
+					rmatch=findRefMatch(qt, rloc, rovlen);
+					if (rmatch==NULL
+							&& ((CTData*)qt.uptr)->ovls.Count()==0) {
+						//not an ichain match, look for other codes
+						gatherRefLocOvls(qt, rloc);
+					}
+				}
+			}
+			else rmatch=qtdata->eqref;
+		} //for each qry transcript
+	}//for each qry dataset
 }
 
 

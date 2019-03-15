@@ -326,6 +326,10 @@ public:
 			if (r!=NULL) *r=ovls[0]->mrna;
 			if (ovlen!=NULL) *ovlen=ovls[0]->ovlen;
 		}
+		else {
+			if (r!=NULL) *r=NULL;
+			if (ovlen!=NULL) *ovlen=0;
+		}
 		return best_ovlcode;
     }
 	bool operator<(CTData& b) { return (mrna < b.mrna); }
@@ -342,7 +346,7 @@ public:
 	GXSeg(uint s=0, uint e=0, int f=0):GSeg(s,e),flags(f) { }
 };
 
-char getRefOvl(GffObj& m, GLocus& rloc, GffObj*& rovl, int& ovlen);
+void gatherRefLocOvls(GffObj& m, GLocus& rloc);
 
 bool intronChainMatch(GffObj &a, GffObj &b);
 
@@ -1351,9 +1355,6 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false,
 int qsearch_mrnas(uint x, GList<GffObj>& mrnas);
 int qsearch_loci(uint x, GList<GLocus>& segs); // same as above, but searching for loci segments
 //--- qsearch transcript overlap (returning -1 when no overlap is found)
-int qfind_tovl(GffObj* m, GList<GffObj>& mrnas); //find one overlapping transcript in mrnas
-int qfind_ovlocus(GffObj* m, GList<GLocus>& loci);  //find overlapping locus in loci
-
 
 GSeqData* getRefData(int gid, GList<GSeqData>& ref_data); //returns reference GSeqData for a specific genomic sequence
 
