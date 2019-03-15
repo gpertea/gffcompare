@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.11.0"
+#define VERSION "0.11.1"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -449,21 +449,20 @@ int main(int argc, char* argv[]) {
           if (rtfiles[fi]==NULL)
              GError("Error creating file '%s'!\n",s.chars());
           fprintf(rtfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_id_list\n");
-          }
         }
-
-      GList<GSeqData>* pdata=new GList<GSeqData>(true,true,true);
-      qrysdata[fi]=pdata;
-      if (gtf_tracking_verbose)
-    	  GMessage("Loading transcripts from query file: %s..\n",in_file.chars());
-      //int discard_check=discard_redundant;
-      //if (keepRefMatching) {
-      //  discard_check=0;
-      //}
-      read_mRNAs(f_in, *pdata, &ref_data, !gffAnnotate, fi, in_file.chars(), multiexon_only);
-      GSuperLocus gstats;
-      GFaSeqGet *faseq=NULL;
-      for (int g=0;g<pdata->Count();g++) { //for each seqdata related to a genomic sequence
+    }
+    GList<GSeqData>* pdata=new GList<GSeqData>(true,true,true);
+    qrysdata[fi]=pdata;
+    if (gtf_tracking_verbose)
+       GMessage("Loading transcripts from query file: %s..\n",in_file.chars());
+    //int discard_check=discard_redundant;
+    //if (keepRefMatching) {
+    //  discard_check=0;
+    //}
+    read_mRNAs(f_in, *pdata, &ref_data, !gffAnnotate, fi, in_file.chars(), multiexon_only);
+    GSuperLocus gstats;
+    GFaSeqGet *faseq=NULL;
+    for (int g=0;g<pdata->Count();g++) { //for each genomic sequence
         int gsid=pdata->Get(g)->get_gseqid();
         GSeqData* refdata=getRefData(gsid, ref_data);//ref data for this contig
         if (!gtf_tracking_largeScale)
@@ -479,10 +478,10 @@ int main(int argc, char* argv[]) {
         if (!gtf_tracking_largeScale) reportStats(f_out, getGSeqName(gsid), gstats,
               pdata->Get(g), refdata);
         if (faseq!=NULL) delete faseq;
-      } //for each genomic sequence data
-      //there could be genomic sequences with no qry transcripts
-      //but with reference transcripts
-      if (haveRefs && !reduceRefs && !gtf_tracking_largeScale) {
+    } //for each genomic sequence data
+    //there could be genomic sequences with no qry transcripts
+    //but with reference transcripts
+    if (haveRefs && !reduceRefs && !gtf_tracking_largeScale) {
         for (int r=0;r<ref_data.Count();r++) {
           GSeqData* refdata=ref_data[r];
           int gsid=refdata->get_gseqid();
@@ -490,9 +489,9 @@ int main(int argc, char* argv[]) {
             reportStats(f_out, getGSeqName(gsid), gstats, NULL, refdata);
             }//completely missed all refdata on this contig
         }
-      }
-      //now report the summary:
-      if (!gtf_tracking_largeScale) reportStats(f_out, in_file.chars(), gstats);
+    }
+    //now report the summary:
+    if (!gtf_tracking_largeScale) reportStats(f_out, in_file.chars(), gstats);
       //qfileno++;
   }//for each input file
   if (f_mintr!=NULL) fclose(f_mintr);
@@ -1747,36 +1746,6 @@ void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* 
  xloc->addXCons(c);
 }
 
-char getRefOvl(GffObj& m, GLocus& rloc, GffObj*& rovl, int& ovlen) {
-	rovl=NULL;
-	ovlen=0;
-	if (m.start>rloc.end || m.end<rloc.start) {
-		//see if it's a polymerase run ?
-		/*
-       if ((m.strand=='+' && m.end<=rloc.end+polyrun_range) ||
-         (m.strand=='-' && m.start>=rloc.start-polyrun_range)) {
-            rovl=rloc.mrna_maxcov;
-            ((CTData*)m.uptr)->addOvl('p',rloc.mrna_maxcov);
-            return 'p';
-            }
-		 */
-		return 0; //unknown -> intergenic space
-	}
-	for (int i=0;i<rloc.mrnas.Count();i++) {
-		GffObj* r=rloc.mrnas[i];
-		int olen=0;
-		char ovlcode=getOvlCode(m,*r,olen);
-		if (ovlcode!=0) { //has some sort of overlap with r
-			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
-			if (olen>ovlen) ovlen=olen;
-			if (ovlcode=='c' || ovlcode=='=') //keep match/containment for each reference transcript
-				((CTData*)r->uptr)->addOvl(ovlcode,&m,olen);
-		}
-	}//for each ref in rloc
-	// i,j,o
-	return ((CTData*)m.uptr)->getBestCode();
-}
-
 void findTMatches(GTrackLocus& loctrack, int qcount) {
  //perform an all vs. all ichain-match for all transcripts across all loctrack[i]->qloci
 for (int q=0;q<qcount-1;q++) { //for each qry dataset
@@ -2007,7 +1976,8 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
     if (qtdata->eqref==NULL) { //find any rloc overlap -- class code
        if (qt.overlap(rloc.start, rloc.end)) {
           rmatch=findRefMatch(qt, rloc, rovlen);
-          if (rmatch==NULL) {
+          if (rmatch==NULL &&
+               ((CTData*)qt.uptr)->ovls.Count()==0) {
             //not an ichain match, look for other codes
             GffObj* rovl=NULL;
             int rovlen=0;
@@ -2024,7 +1994,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
 
 bool inPolyRun(char strand, GffObj& m, GList<GLocus>* rloci, int& rlocidx) {
  //we are only here if there is no actual overlap between m and any locus in rloci
- if (rloci==NULL || rloci->Count()==0) return false; // || m.exons.Count()>1
+  if (rloci==NULL || rloci->Count()==0) return false; // || m.exons.Count()>1
   if (strand=='-') {
         rlocidx=qsearch_loci(m.end, *rloci);
         //returns index of locus starting just ABOVE m.end
@@ -2037,8 +2007,7 @@ bool inPolyRun(char strand, GffObj& m, GList<GLocus>* rloci, int& rlocidx) {
            if (rloc->start+6>m.end) return true;
            rlocidx++;
            }
-        }
-      else { // strand == '+' (or '.' ?)
+  } else { // strand == '+' (or '.' ?)
         rlocidx=qsearch_loci(m.end, *rloci);
         GLocus* rloc=NULL;
         //returns index of closest locus starting ABOVE m.end
@@ -2048,8 +2017,8 @@ bool inPolyRun(char strand, GffObj& m, GList<GLocus>* rloci, int& rlocidx) {
           rloc=rloci->Get(rlocidx);
           if (m.start>rloc->start+GFF_MAX_LOCUS) break;
           if (m.start+6>rloc->end && m.start<rloc->end+polyrun_range) return true;
-          }
         }
+  }
   return false;
 }
 

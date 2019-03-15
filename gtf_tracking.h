@@ -320,8 +320,13 @@ public:
 	void addOvl(char code,GffObj* target=NULL, int ovlen=0) {
 		ovls.AddIfNew(new COvLink(code, target, ovlen));
 	}
-	char getBestCode() {
-		return (ovls.Count()>0) ? ovls[0]->code : 0 ;
+	char getBestCode(GffObj** r=NULL, int* ovlen=NULL) {
+		char best_ovlcode = (ovls.Count()>0) ? ovls[0]->code : 0 ;
+		if (best_ovlcode>0) {
+			if (r!=NULL) *r=ovls[0]->mrna;
+			if (ovlen!=NULL) *ovlen=ovls[0]->ovlen;
+		}
+		return best_ovlcode;
     }
 	bool operator<(CTData& b) { return (mrna < b.mrna); }
 	bool operator==(CTData& b) { return (mrna==b.mrna); }
@@ -336,6 +341,8 @@ public:
 	int flags;
 	GXSeg(uint s=0, uint e=0, int f=0):GSeg(s,e),flags(f) { }
 };
+
+char getRefOvl(GffObj& m, GLocus& rloc, GffObj*& rovl, int& ovlen);
 
 bool intronChainMatch(GffObj &a, GffObj &b);
 
@@ -1338,11 +1345,15 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false,
            bool contain_only=false);
 
 //use qsearch to "position" a given coordinate x within a list of transcripts sorted
-//by their start (lowest) coordinate; the returned int is the list index of the
-//closest GffObj starting just *ABOVE* coordinate x
-//Convention: returns -1 if there is no such GffObj (i.e. last GffObj start <= x)
+//by their start (lowest) coordinate;
+//the return value is the index of the closest GffObj starting just *ABOVE* coordinate x
+//Convention: returns -1 if there is no such GffObj (i.e. mrnas.Last().start <= x)
 int qsearch_mrnas(uint x, GList<GffObj>& mrnas);
-int qsearch_loci(uint x, GList<GLocus>& segs); // same as above, but for GSeg lists
+int qsearch_loci(uint x, GList<GLocus>& segs); // same as above, but searching for loci segments
+//--- qsearch transcript overlap (returning -1 when no overlap is found)
+int qfind_tovl(GffObj* m, GList<GffObj>& mrnas); //find one overlapping transcript in mrnas
+int qfind_ovlocus(GffObj* m, GList<GLocus>& loci);  //find overlapping locus in loci
+
 
 GSeqData* getRefData(int gid, GList<GSeqData>& ref_data); //returns reference GSeqData for a specific genomic sequence
 

@@ -170,23 +170,23 @@ bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking) {
 
 
 int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false, bool intron_poking=false) {
- //first locate the list index of the mrna starting just ABOVE
- //the end of this mrna
- if (mrnas->Count()==0) return -1;
- int nidx=qsearch_mrnas(m->end, *mrnas);
- if (nidx==0) return -1;
- if (nidx==-1) nidx=mrnas->Count();//all can overlap
- for (int i=nidx-1;i>=0;i--) {
-     GffObj& omrna=*mrnas->Get(i);
-     if (m->start>omrna.end) {
-          if (m->start-omrna.start>GFF_MAX_EXON) break; //give up already
-          continue;
-          }
-     if (omrna.start>m->end) continue; //this should never be the case if nidx was found correctly
-     //FIXME : what about single-exon transcript redundancy ? probably not needed within a sample
-     if (intronRedundant(*m, omrna, no5share, intron_poking)) return i;
-     }
- return -1;
+	//first locate the list index of the mrnas starting just ABOVE m->end
+	if (mrnas->Count()==0) return -1;
+	int nidx=qsearch_mrnas(m->end, *mrnas);
+	if (nidx==0) return -1; //none can overlap
+	if (nidx==-1) nidx=mrnas->Count();//all can overlap
+	for (int i=nidx-1;i>=0;i--) {
+		GffObj& t=*mrnas->Get(i); //overlap check target
+		if (m->start>t.end) { //m starts after target ends
+			if (m->start > t.start+GFF_MAX_LOCUS)
+				break; //went too far back, give up
+			continue;
+		}
+		if (t.start>m->end) continue; //this should never be the case if nidx was found correctly
+		//what about single-exon transcript redundancy ? probably not needed within a sample
+		if (intronRedundant(*m, t, no5share, intron_poking)) return i;
+	}
+	return -1;
 }
 
 bool t_dominates(GffObj* a, GffObj* b) {
@@ -478,106 +478,112 @@ void cluster_mRNAs(GList<GffObj> & mrnas, GList<GLocus> & loci, int qfidx) {
 	//return rdisc;
 }
 
-int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
-	//attempt to find the strand for seqdata.umrnas
+char getRefOvl(GffObj& m, GLocus& rloc, GffObj*& rovl, int& ovlen) {
+	rovl=NULL;
+	ovlen=0;
+	if (m.start>rloc.end || m.end<rloc.start) {
+		return 0; //unknown -> intergenic space
+	}
+	for (int i=0;i<rloc.mrnas.Count();i++) {
+		GffObj* r=rloc.mrnas[i];
+		int olen=0;
+		char ovlcode=getOvlCode(m,*r,olen);
+		if (ovlcode!=0) { //has some sort of overlap with r
+			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
+			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }
+			if (ovlcode=='c' || ovlcode=='=') //keep match/containment for each reference transcript
+				((CTData*)r->uptr)->addOvl(ovlcode,&m,olen);
+		}
+	}//for each ref in rloc
+	GffObj** rr=&rovl;
+	char best_code=((CTData*)m.uptr)->getBestCode(rr, &ovlen);
+	return best_code;
+}
+
+int getMaxOvl(GffObj* m, GList<GffObj>& mrnas) {
+	int maxovl=0;
+	if (mrnas.Count()>0) {
+		int qidx=qsearch_mrnas(m->end, mrnas);
+		//qidx is lowest index having mrnas_f[qidx]->start > m->end
+		if (qidx!=0) {
+			if (qidx==-1) qidx=mrnas.Count();
+			for (int i=qidx-1;i>=0;i--) {
+				GffObj& t=*mrnas[i];
+				if (m->start > t.end) {
+					if (m->start > t.start+GFF_MAX_LOCUS)
+						break; //went too far back, give up
+					continue;
+				}
+				if (t.start>m->end) continue; //shouldn't happen
+				//m overlaps t
+				int ovl=m->exonOverlapLen(t);
+				if (ovl>maxovl) maxovl=ovl;
+			}
+		}
+	}
+	return maxovl;
+}
+
+int umrnas_assignStrand(GSeqData& seqdata, GSeqData* rdata) {
+	//attempt to find the strand for seqdata.umrnas (undetermined strand q)
 	//based on a) overlaps with oriented reference mRNAs if present
 	//         b) overlaps with oriented mRNAs from the same input set
-	//int incount=seqdata.umrnas.Count();
-	if (rdata!=NULL) { //we have reference mrnas
-		for (int i=0;i<rdata->mrnas_f.Count();i++) {
-			for (int j=0;j<seqdata.umrnas.Count();j++) {
-				if (rdata->mrnas_f[i]->gseq_id!=seqdata.umrnas[j]->gseq_id) continue;
-				if (seqdata.umrnas[j]->strand!='.') continue;
-				uint ustart=seqdata.umrnas[j]->exons.First()->start;
-				uint uend=seqdata.umrnas[j]->exons.Last()->end;
-				uint rstart=rdata->mrnas_f[i]->exons.First()->start;
-				uint rend=rdata->mrnas_f[i]->exons.Last()->end;
-				if (ustart>rend) break;
-				if (rstart>uend) continue;
-				if (rdata->mrnas_f[i]->exonOverlap(ustart,uend)) {
-					seqdata.umrnas[j]->strand='+';
-				}
-				else { //within intron
-					//if (seqdata.umrnas[j]->ulink==NULL ||
-					//     seqdata.umrnas[j]->ulink->covlen<rdata->mrnas_f[i]->covlen) {
-					CTData* mdata=(CTData*)seqdata.umrnas[j]->uptr;
-					mdata->addOvl('i',rdata->mrnas_f[i]);
-				}
-			}
-		}
-		for (int i=0;i<rdata->mrnas_r.Count();i++) {
-			for (int j=0;j<seqdata.umrnas.Count();j++) {
-				if (seqdata.umrnas[j]->strand!='.') continue;
-				uint ustart=seqdata.umrnas[j]->exons.First()->start;
-				uint uend=seqdata.umrnas[j]->exons.Last()->end;
-				uint rstart=rdata->mrnas_r[i]->exons.First()->start;
-				uint rend=rdata->mrnas_r[i]->exons.Last()->end;
-				if (ustart>rend) break;
-				if (rstart>uend) continue;
-				if (rdata->mrnas_r[i]->exonOverlap(ustart,uend)) {
-					seqdata.umrnas[j]->strand='-';
-				}
-				else { //within intron
-					CTData* mdata=(CTData*)seqdata.umrnas[j]->uptr;
-					mdata->addOvl('i',rdata->mrnas_r[i]);
-				}
-
-			}
-		}
-	}//we have reference transcripts
-	//---- now compare to other qry transcripts
-	for (int i=0;i<seqdata.mrnas_f.Count();i++) {
-		for (int j=0;j<seqdata.umrnas.Count();j++) {
-			if (seqdata.umrnas[j]->strand!='.') continue;
-			uint ustart=seqdata.umrnas[j]->exons.First()->start;
-			uint uend=seqdata.umrnas[j]->exons.Last()->end;
-			uint rstart=seqdata.mrnas_f[i]->exons.First()->start;
-			uint rend=seqdata.mrnas_f[i]->exons.Last()->end;
-			if (ustart>rend) break;
-			if (rstart>uend) continue;
-			if (seqdata.mrnas_f[i]->exonOverlap(ustart,uend)) {
-				seqdata.umrnas[j]->strand='+';
-			}
-		}
-	}
-	for (int i=0;i<seqdata.mrnas_r.Count();i++) {
-		for (int j=0;j<seqdata.umrnas.Count();j++) {
-			if (seqdata.umrnas[j]->strand!='.') continue;
-			uint ustart=seqdata.umrnas[j]->exons.First()->start;
-			uint uend=seqdata.umrnas[j]->exons.Last()->end;
-			uint rstart=seqdata.mrnas_r[i]->exons.First()->start;
-			uint rend=seqdata.mrnas_r[i]->exons.Last()->end;
-			if (ustart>rend) break;
-			if (rstart>uend) continue;
-			//overlap
-			if (seqdata.mrnas_r[i]->exonOverlap(ustart,uend)) {
-				seqdata.umrnas[j]->strand='-';
-			}
-		}
-    }
-	int fcount=0;
+	// stupid complication: if there are refs overlapping this unstranded mrna on BOTH strands (?!)
+	//   then we need an overlap code priority to assign the "best-overlap" strand
 	int fixed=0;
-	for (int i=0;i<seqdata.umrnas.Count();i++) {
-		if (seqdata.umrnas[i]->strand=='+') {
-			seqdata.mrnas_f.Add(seqdata.umrnas[i]);
-			fixed++;
-			seqdata.umrnas.Forget(i);
-		}
-		else if (seqdata.umrnas[i]->strand=='-') {
-		    seqdata.mrnas_r.Add(seqdata.umrnas[i]);
-		    seqdata.umrnas.Forget(i);
-		    fixed++;
-		}
-		else {  //discard mRNAs not settled
-			//seqdata.umrnas[i]->strand='.'; ?
-			if (fdis!=NULL) {
-				seqdata.umrnas[i]->printGtf(fdis);
+	for (int j=0;j<seqdata.umrnas.Count();j++) {
+		if (seqdata.umrnas[j]->strand!='.') continue;
+		GffObj* m=seqdata.umrnas[j];
+		//CTData* mdata=(CTData*)seqdata.umrnas[j]->uptr;
+		int lidx=-1;
+		if (rdata!=NULL) {
+			lidx=qfind_ovlocus(m, rdata->loci_f);
+			GffObj* refovl=NULL;
+			int ovlen=0;
+			if (lidx>=0)
+				getRefOvl(*m, *(rdata->loci_f[lidx]), refovl, ovlen);
+			//similarly, collect the ref ovls on the reverse strand
+			lidx=qfind_ovlocus(m, rdata->loci_r);
+			if (lidx>=0) {
+				getRefOvl(*m, *(rdata->loci_r[lidx]), refovl, ovlen);
+			}
+			if (ovlen>0 && refovl!=NULL) {
+				m->strand=refovl->strand;
+				if (m->strand=='+') {
+						seqdata.mrnas_f.Add(m);
+						seqdata.umrnas.Forget(j);
+						fixed++;
 				}
-			fcount++;
+					else if (m->strand=='-') {
+						seqdata.mrnas_r.Add(m);
+						seqdata.umrnas.Forget(j);
+						fixed++;
+				}
+			}
+		} //if rdata
+	} //umrnas loop
+	//refassign=fixed;
+	//---- now compare to other qry transcripts that already have a strand
+	int maxovl_f=0; //maximum overlap found with forward strand transcripts
+	int maxovl_r=0; //maximum overlap found with reverse strand transcripts
+	for (int j=0;j<seqdata.umrnas.Count();j++) {
+		GffObj* m=seqdata.umrnas[j];
+		if (m==NULL) continue; //already assigned
+		maxovl_f=getMaxOvl(m, seqdata.mrnas_f);
+		maxovl_r=getMaxOvl(m, seqdata.mrnas_r);
+		if (maxovl_f>maxovl_r) {
+			m->strand='+';
+			seqdata.mrnas_f.Add(m);
+			seqdata.umrnas.Forget(j);
+			fixed++;
+		} else if (maxovl_r>maxovl_f) {
+			m->strand='-';
+			seqdata.mrnas_r.Add(m);
+			seqdata.umrnas.Forget(j);
+			fixed++;
 		}
 	}
-
-	seqdata.umrnas.Pack();
+	if (fixed>0) seqdata.umrnas.Pack();
 	//if (gtf_tracking_verbose) {
 	//	GMessage(" %d out of %d (%d left, %d) unoriented transfrags were assigned a strand based on overlaps.\n", fixed, incount, seqdata.umrnas.Count(), fcount);
 	//}
@@ -689,7 +695,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 			GSeqData* rdata=getRefData(gseq_id, *ref_data);
 			initial_unoriented+=seqdata[g]->umrnas.Count();
 			if (seqdata[g]->umrnas.Count()>0) {
-			    oriented_by_overlap+=fix_umrnas(*seqdata[g], rdata, fdis);
+			    oriented_by_overlap+=umrnas_assignStrand(*seqdata[g], rdata); //, fdis);
 			    final_unoriented+=seqdata[g]->umrnas.Count();
 			    }
 			}
@@ -698,7 +704,7 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 		cluster_mRNAs(seqdata[g]->mrnas_r, seqdata[g]->loci_r, qfidx);
 		if (!isRefData) {
 			cluster_mRNAs(seqdata[g]->umrnas, seqdata[g]->nloci_u, qfidx);
-			}
+		}
 		loci_counter+=seqdata[g]->loci_f.Count();
 		loci_counter+=seqdata[g]->loci_r.Count();
 //		if (refData) {
@@ -724,70 +730,123 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 #endif
 }
 
+
+int qfind_tovl(GffObj* m, GList<GffObj>& mrnas) {
+  //quick search of 1st range-overlapping transcript
+  //mrnas should be sorted by coordinate
+  //(assuming m & mrnas are on the same refseq)
+  //IMPORTANT: only finds ONE overlapping boundary transcript, others may be
+  // above or below the returned index !
+  if (mrnas.Count()==0) return -1;
+  if (mrnas.First()->start>m->end ||
+      mrnas.Last()->end<m->start)   return -1;
+  int mi=0;
+  int lidx=0;
+  int hidx=mrnas.Count()-1;
+  while (lidx<=hidx) {
+		mi = (lidx+hidx) >> 1; //range midpoint
+		if (m->start > mrnas[mi]->end)
+			lidx=mi+1; //search upper half next
+		else { // m->start<= mrnas[mi]->end
+			if (m->end >= mrnas[mi]->start) {
+				return mi; //found *a* overlap
+			}
+			// m->end < mrnas[mi]->start
+			hidx = mi-1; //search lower half
+		}
+  }
+  //no overlap found
+  return -1;
+}
+
+int qfind_ovlocus(GffObj* m, GList<GLocus>& loci) {
+  //quick search of 1st range-overlapping transcript
+  //loci should be sorted by coordinate
+  //(assuming m & loci are on the same refseq, obviously)
+  if (loci.Count()==0) return -1;
+  if (loci.First()->start>m->end ||
+      loci.Last()->end<m->start)   return -1;
+  int mi=0;
+  int lo=0;
+  int hi=loci.Count()-1;
+  while (lo<=hi) {
+		mi = (lo+hi) >> 1; //range midpoint
+		if (m->start > loci[mi]->end)
+			lo=mi+1;
+		else { // m->start<= loci[mi]->end
+			if (m->end >= loci[mi]->start) {
+				return mi; //overlap found
+			}
+			//so m->end < loci[mi]->start
+			hi = mi-1;
+		}
+  }
+  return -1;
+}
+
 int qsearch_mrnas(uint x, GList<GffObj>& mrnas) {
-  //binary search
-  //do the simplest tests first:
-  if (mrnas[0]->start>x) return 0;
-  if (mrnas.Last()->start<x) return -1;
-  uint istart=0;
-  int i=0;
-  int idx=-1;
-  int maxh=mrnas.Count()-1;
-  int l=0;
-  int h = maxh;
-  while (l <= h) {
-     i = (l+h)>>1;
-     istart=mrnas[i]->start;
-     if (istart < x)  l = i + 1;
-          else {
-             if (istart == x) { //found matching coordinate here
-                  idx=i;
-                  while (idx<=maxh && mrnas[idx]->start==x) {
-                     idx++;
-                     }
-                  return (idx>maxh) ? -1 : idx;
-                  }
-             h = i - 1;
-             }
-     } //while
- idx = l;
- while (idx<=maxh && mrnas[idx]->start<=x) {
-    idx++;
-    }
- return (idx>maxh) ? -1 : idx;
+	//quick search on sorted mrnas list
+	//return the lowest idx where mrnas[idx]->start > x
+	//---caller should make sure that mrnas.Count()>0 !
+	if (mrnas[0]->start>x) return 0; //all start after x
+	if (mrnas.Last()->start<x) return -1; //all start before x
+	uint mstart=0;
+	int mi=0;
+	int idx=-1;
+	int maxh=mrnas.Count()-1;
+	int l=0;
+	int h = maxh;
+	while (l <= h) {
+		mi = (l+h)>>1; //pivot index
+		mstart=mrnas[mi]->start;
+		if (mstart < x)  l = mi + 1; //search upper half
+		else { // mstart >= x
+			if (mstart == x) { //found matching start
+				idx=mi;//just find the first item starting above x
+				while (idx<=maxh && mrnas[idx]->start==x)
+					idx++;
+				return (idx>maxh) ? -1 : idx;
+			}
+			h = mi - 1; //search lower half
+		}
+	} //while there's a range of indexes to check
+	idx = l; //no match found, h==l
+	//--find first item starting above x
+	while (idx<=maxh && mrnas[idx]->start<=x)
+		idx++;
+	return (idx>maxh) ? -1 : idx;
 }
 
 int qsearch_loci(uint x, GList<GLocus>& loci) {
- // same as above, but for GSeg lists
-  //binary search
-  //do the simplest tests first:
-  if (loci[0]->start>x) return 0;
-  if (loci.Last()->start<x) return -1;
-  uint istart=0;
-  int i=0;
-  int idx=-1;
-  int maxh=loci.Count()-1;
-  int l=0;
-  int h = maxh;
-  while (l <= h) {
-     i = (l + h) >> 1;
-     istart=loci[i]->start;
-     if (istart < x) l=i+1;
-                else {
-                   if (istart == x) { //found matching coordinate here
-                        idx=i;
-                        while (idx<=maxh && loci[idx]->start==x) {
-                           idx++;
-                           }
-                        return (idx>maxh) ? -1 : idx;
-                        }
-                   h=i-1;
-                   }
-     } //while
- idx = l;
- while (idx<=maxh && loci[idx]->start<=x) {
-    idx++;
-    }
- return (idx>maxh) ? -1 : idx;
+	//quick search on sorted loci list
+	//return the lowest idx where loci[idx]->start > x
+	//---caller should make sure that loci.Count()>0 !
+	if (loci[0]->start>x) return 0;
+	if (loci.Last()->start<x) return -1;
+	uint mstart=0;
+	int mi=0;
+	int idx=-1;
+	int maxh=loci.Count()-1;
+	int l=0;
+	int h = maxh;
+	while (l <= h) {
+		mi = (l + h) >> 1;
+		mstart=loci[mi]->start;
+		if (mstart < x) l=mi+1;
+		else {
+			if (mstart == x) { //found matching coordinate here
+				idx=mi;
+				while (idx<=maxh && loci[idx]->start==x)
+					idx++;
+				return (idx>maxh) ? -1 : idx;
+			}
+			h=mi-1;
+		}
+	} //while
+	idx = l;
+	while (idx<=maxh && loci[idx]->start<=x) {
+		idx++;
+	}
+	return (idx>maxh) ? -1 : idx;
 }
 
