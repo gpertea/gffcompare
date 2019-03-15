@@ -505,6 +505,7 @@ int getMaxOvl(GffObj* m, GList<GffObj>& mrnas) {
 	if (mrnas.Count()>0) {
 		int qidx=qsearch_mrnas(m->end, mrnas);
 		//qidx is lowest index having mrnas_f[qidx]->start > m->end
+		// so mrnas_f[qidx-1]->start <= m->end
 		if (qidx!=0) {
 			if (qidx==-1) qidx=mrnas.Count();
 			for (int i=qidx-1;i>=0;i--) {
