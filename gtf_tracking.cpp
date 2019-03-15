@@ -508,6 +508,9 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 				if (rstart>uend) continue;
 				if (rdata->mrnas_f[i]->exonOverlap(ustart,uend)) {
 					seqdata.umrnas[j]->strand='+';
+                                        if (gtf_tracking_verbose)
+                                          GMessage("umrna %s assigned + strand due to ref %s overlap\n",
+                                             seqdata.umrnas[j]->getID(), rdata->mrnas_f[i]->getID());
 				}
 				else { //within intron
 					//if (seqdata.umrnas[j]->ulink==NULL ||
@@ -528,6 +531,10 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 				if (rstart>uend) continue;
 				if (rdata->mrnas_r[i]->exonOverlap(ustart,uend)) {
 					seqdata.umrnas[j]->strand='-';
+                                        if (gtf_tracking_verbose)
+                                          GMessage("umrna %s assigned - strand due to ref %s overlap\n",
+                                             seqdata.umrnas[j]->getID(), rdata->mrnas_r[i]->getID());
+
 				}
 				else { //within intron
 					CTData* mdata=(CTData*)seqdata.umrnas[j]->uptr;
@@ -549,6 +556,10 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 			if (rstart>uend) continue;
 			if (seqdata.mrnas_f[i]->exonOverlap(ustart,uend)) {
 				seqdata.umrnas[j]->strand='+';
+                                        if (gtf_tracking_verbose)
+                                          GMessage("umrna %s assigned + strand due to qry %s overlap\n",
+                                             seqdata.umrnas[j]->getID(), seqdata->mrnas_f[i]->getID());
+
 			}
 		}
 	}
@@ -564,6 +575,9 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 			//overlap
 			if (seqdata.mrnas_r[i]->exonOverlap(ustart,uend)) {
 				seqdata.umrnas[j]->strand='-';
+                                        if (gtf_tracking_verbose)
+                                          GMessage("umrna %s assigned - strand due to qry %s overlap\n",
+                                             seqdata.umrnas[j]->getID(), seqdata->mrnas_r[i]->getID());
 			}
 		}
     }
@@ -580,13 +594,13 @@ int fix_umrnas(GSeqData& seqdata, GSeqData* rdata, FILE* fdis=NULL) {
 		    seqdata.umrnas.Forget(i);
 		    fixed++;
 		}
-		else {  //discard mRNAs not settled
+		/* else {  //discard mRNAs not settled
 			//seqdata.umrnas[i]->strand='.'; ?
 			if (fdis!=NULL) {
 				seqdata.umrnas[i]->printGtf(fdis);
 				}
 			fcount++;
-		}
+		}*/
 	}
 
 	seqdata.umrnas.Pack();
