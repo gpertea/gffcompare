@@ -35,6 +35,11 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     (Warning: this will discard all \"novel\" loci!)\n\
  -M discard (ignore) single-exon transfrags and reference transcripts\n\
  -N discard (ignore) single-exon reference transcripts\n\
+ -D discard \"duplicate\" query transfrags (i.e. those with the same\n\
+    intron chain) within a single sample (disable \"annotation\" mode)\n\
+ -S like -D, but stricter duplicate checking: only discard matching query\n\
+    transfrags (same intron chain) if their boundaries are fully contained\n\
+    within other, larger or identical transfrags\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\
@@ -42,20 +47,19 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transfrags as repeats\n\
 \n\
  -T do not generate .tmap and .refmap files for each input file\n\
- --qdup (stricter duplicate checking) do not discard matching query\n\
-      transcripts within a sample unless their boundaries are also fully\n\
-       contained within other, larger or identical transcript\n\
  -e max. distance (range) allowed from free ends of terminal exons of\n\
     reference transcripts when assessing exon accuracy (100)\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
- -D (debug mode) enables -V and generates additional files: \n\
+ --chr-stats: the .stats file will show summary and accuracy data\n\
+   for each reference contig/chromosome separately\n\
+ --debug enables -V and generates additional files: \n\
     <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
 \n\
-Options for the annotated/combined GTF output file:\n\
+Options for the combined GTF output file:\n\
  -p the name prefix to use for consensus transcripts in the \n\
     <outprefix>.combined.gtf file (default: 'TCONS')\n\
- -C discard the \"contained\" transfrags in the GTF output\n\
+ -C discard matching and \"contained\" transfrags in the GTF output\n\
     (i.e. collapse intron-redundant transfrags across all query files)\n\
  -A like -C but does not discard intron-redundant transfrags if they start\n\
     with a different 5' exon (keep alternate TSS)\n\
@@ -74,7 +78,7 @@ bool debug=false;
 bool perContigStats=false; // -S to enable separate stats for every contig/chromosome
 //bool generic_GFF=false;
 //true if -G: won't discard intron-redundant transfrags
-bool discardRedundant=false; //activated by -C, -A or -X
+bool discardContained=false; //activated by -C, -A or -X
 //bool showContained=true; // opposite of -C, default is to show them in combined.gtf
 //-- moved to gtf_tracking
 bool keepAltTSS=false; //-A option
@@ -90,7 +94,7 @@ bool tmapFiles=true;
 bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_names
 bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
-
+bool qDupDiscard=false;
 bool qDupStrict=false;
 
 bool only_spliced_refs=false;
@@ -225,7 +229,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;gids;gidnames;gnames;qdup;vACDGEFJKLMNQTVRSXhp:e:d:s:i:n:r:o:");
+		  "version;help;debug;gids;gidnames;gnames;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -240,17 +244,18 @@ int main(int argc, char* argv[]) {
     show_version();
     exit(0);
   }
-  debug=(args.getOpt('D')!=NULL);
+  debug=(args.getOpt("debug")!=NULL);
   tmapFiles=(args.getOpt('T')==NULL);
   multiexon_only=(args.getOpt('M')!=NULL);
   multiexonrefs_only=(args.getOpt('N')!=NULL);
   set_gene_name=(args.getOpt("gnames")!=NULL);
   gid_add_ref_gids=(args.getOpt("gids")!=NULL);
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
-  qDupStrict=(args.getOpt("qdup")!=NULL);
+  qDupDiscard=(args.getOpt('D')!=NULL);
+  qDupStrict=(args.getOpt('S')!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
-  perContigStats=(args.getOpt('S')!=NULL);
+  perContigStats=(args.getOpt("chr-stats")!=NULL);
   checkFasta=(args.getOpt('J')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
   FILE* finlst=NULL;
@@ -309,40 +314,7 @@ int main(int argc, char* argv[]) {
   if (!s.is_empty()) loadRefDescr(s.chars());
   reduceRefs=(args.getOpt('R')!=NULL);
   reduceQrys=(args.getOpt('Q')!=NULL);
-  s=args.getOpt('r');
-  if (s.is_empty()) {
-	RefReqCheck(multiexonrefs_only, "-M");
-	RefReqCheck(reduceRefs, "-R");
-	RefReqCheck(reduceQrys, "-Q");
-	RefReqCheck(set_gene_name, "--gnames");
-	RefReqCheck(gid_add_ref_gids, "--gids");
-	RefReqCheck(gid_add_ref_gnames, "--gidnames");
-  } else { //reference annotation file provided
-    f_ref=fopen(s,"r");
-    if (f_ref==NULL) GError("Error opening reference gff: %s\n",s.chars());
-    haveRefs=true;
-    if (gtf_tracking_verbose) GMessage("Loading reference transcripts..\n");
-    read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(), (multiexonrefs_only || multiexon_only));
-    haveRefs=(ref_data.Count()>0);
-    //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
-  }
-  if (args.getOpt('C')) discardRedundant=true;
-  if (args.getOpt('A')) {
-	  //redundancy check will NOT consider containment for alt. TSS
-	  keepAltTSS=true;
-	  if (discardRedundant)
-		   GMessage("Warning: option -C will be ignored, -A takes precedence.\n");
-	  discardRedundant=true;
-  }
-  if (args.getOpt('X')) {
-	discardRedundant=true;
-	allowIntronSticking=true;
-  }
-  keepRefMatching=(args.getOpt('K')!=NULL);
-  if (keepRefMatching && !discardRedundant) {
-	  GMessage("Warning: -K option ignored, requires -C, -A or -X\n");
-	  keepRefMatching=false;
-  }
+
   //if a full pathname is given
   //the other common output files will still be created in the current directory:
   // .loci, .tracking, .stats
@@ -362,11 +334,47 @@ int main(int argc, char* argv[]) {
     else outext.lower();
   if (outext=="txt" || outext=="out" || outext=="stats" || outext=="summary") {
       outbasename.cut(outbasename.length()-outext.length()-1);
-      }
+  }
 
   outprefix=outbasename;
   int di=outprefix.rindex(CHPATHSEP);
   if (di>=0) outprefix.cut(0,di+1);
+  if (gtf_tracking_verbose) GMessage("Prefix for output files: %s\n", outprefix.chars());
+
+  s=args.getOpt('r');
+  if (s.is_empty()) {
+	RefReqCheck(multiexonrefs_only, "-M");
+	RefReqCheck(reduceRefs, "-R");
+	RefReqCheck(reduceQrys, "-Q");
+	RefReqCheck(set_gene_name, "--gnames");
+	RefReqCheck(gid_add_ref_gids, "--gids");
+	RefReqCheck(gid_add_ref_gnames, "--gidnames");
+  } else { //reference annotation file provided
+    f_ref=fopen(s,"r");
+    if (f_ref==NULL) GError("Error opening reference gff: %s\n",s.chars());
+    haveRefs=true;
+    if (gtf_tracking_verbose) GMessage("Loading reference transcripts..\n");
+    read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(), (multiexonrefs_only || multiexon_only));
+    haveRefs=(ref_data.Count()>0);
+    //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
+  }
+  if (args.getOpt('C')) discardContained=true;
+  if (args.getOpt('A')) {
+	  //redundancy check will NOT consider containment for alt. TSS
+	  keepAltTSS=true;
+	  if (discardContained)
+		   GMessage("Warning: option -C will be ignored, -A takes precedence.\n");
+	  discardContained=true;
+  }
+  if (args.getOpt('X')) {
+	discardContained=true;
+	allowIntronSticking=true;
+  }
+  keepRefMatching=(args.getOpt('K')!=NULL);
+  if (keepRefMatching && !discardContained) {
+	  GMessage("Warning: -K option ignored, requires -C, -A or -X\n");
+	  keepRefMatching=false;
+  }
 
   if (debug) { //create a few more files potentially useful for debugging
         s=outbasename;
@@ -387,11 +395,10 @@ int main(int argc, char* argv[]) {
         s.append(".wrong_Qintrons.gtf");
         f_qintr=fopen(s.chars(),"w");
         */
-        }
+  }
 
   f_out=fopen(outstats, "w");
   if (f_out==NULL) GError("Error creating output file %s!\n", outstats.chars());
-  if (gtf_tracking_verbose) GMessage("Prefix for output files: %s\n", outprefix.chars());
   fprintf(f_out, "# gffcompare v%s | Command line was:\n#", VERSION);
   for (int i=0;i<argc-1;i++)
     fprintf(f_out, "%s ", argv[i]);
@@ -407,7 +414,7 @@ int main(int argc, char* argv[]) {
 		  GMALLOC(rtfiles, numQryFiles*sizeof(FILE*));
 	  }
   }
-  gffAnnotate=(numQryFiles==1 && !discardRedundant && haveRefs);
+  gffAnnotate=(numQryFiles==1 && !discardContained && haveRefs && !qDupDiscard && !qDupStrict);
   consGTF=outbasename;
   if (gffAnnotate) consGTF.append(".annotated.gtf");
               else consGTF.append(".combined.gtf");
@@ -1310,7 +1317,7 @@ void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, /* GFaSeqG
 		tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
 		//protCluster(xloc,faseq);
 		for (int c=0;c<xloc.tcons.Count();c++) {
-			if (discardRedundant && xloc.tcons[c]->contained!=NULL) {
+			if (discardContained && xloc.tcons[c]->contained!=NULL) {
 				if (!(keepRefMatching && xloc.tcons[c]->refcode=='='))
 				{
 					if (fr) printConsGTF(fr, xloc.tcons[c], xloc.id);
@@ -2526,7 +2533,7 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
   if (f_ctrack==NULL) GError("Error creating file %s !\n",s.chars());
 
   FILE* fredundant=NULL;
-  if (discardRedundant) {
+  if (discardContained) {
 	  s=fbasename;
 	  s.append(".redundant.gtf");
 	  fredundant=fopen(s.chars(),"w");

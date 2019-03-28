@@ -18,6 +18,7 @@ extern int numQryFiles;
 extern bool gtf_tracking_verbose;
 extern bool qDupStrict;
 extern bool gtf_tracking_largeScale;
+extern bool debug;
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
 

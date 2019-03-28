@@ -47,8 +47,8 @@ GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool strictMatch=f
       if (tMatch(*m, omrna, ovlen, !strictMatch, strictMatch)) {
              dupidx=i;
              return mrnas[i];
-             }
       }
+  }
   return NULL;
 }
 
@@ -280,21 +280,27 @@ int parse_mRNAs(GfList& mrnas,
 		      if (betterTDup(rp, m)) {
 		           if (rp->getGeneName()==NULL && m->getGeneName()!=NULL) {
 		                  rp->setGeneName(m->getGeneName());
-		                  }
-		           continue;
 		           }
-		         else {
+				  if (debug)
+					   GMessage("\tReference transcript %s discarded (duplicate of %s)\n",
+					      m->getID(), rp->getID() );
+		           continue;
+		      }
+		      else {
 		           if (m->getGeneName()==NULL && rp->getGeneName()!=NULL) {
 		                  m->setGeneName(rp->getGeneName());
-		                  }
+		           }
+				  if (debug)
+					   GMessage("\tReference transcript %s discarded (duplicate of %s)\n",
+					      rp->getID(), m->getID() );
 		           ((CTData*)(rp->uptr))->mrna=NULL;
 		           rp->isUsed(false);
 		           target_mrnas->Forget(rpidx);
 		           target_mrnas->Delete(rpidx);
-		           }
-		       }
-		     } //check for duplicate ref transcripts
-		   } //ref transcripts
+		      }
+		     }
+		   } //check for duplicate ref transcripts
+		} //ref transcripts
 		else { //-- query transfrags
 		   if (m->strand=='+') { target_mrnas = &(gdata->mrnas_f); }
 		     else if (m->strand=='-') { target_mrnas=&(gdata->mrnas_r); }
@@ -309,14 +315,14 @@ int parse_mRNAs(GfList& mrnas,
 				 tredundant++;
 				 total_kept--;
 				 if (betterTDup(rp, m)) {
-					if (gtf_tracking_verbose)
-					   GMessage("Query transcript %s discarded (duplicate of %s)\n",
+					if (debug)
+					   GMessage("\tQuery transcript %s discarded (duplicate of %s)\n",
 					      m->getID(), rp->getID() );
 					continue;
 				 }
 				 else {
-					if (gtf_tracking_verbose)
-					   GMessage("Query transcript %s discarded (duplicate of %s)\n",
+					if (debug)
+					   GMessage("\tQuery transcript %s discarded (duplicate of %s)\n",
 					      rp->getID(), m->getID() );
 					 ((CTData*)(rp->uptr))->mrna=NULL;
 					 rp->isUsed(false);
@@ -670,19 +676,22 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_readAll");
 #endif
-    //int qtcount=gffr->gflst.Count();
-    if (!isRefData && gtf_tracking_verbose)
-    	GMessage("  %d query transcripts found.\n", gffr->gflst.Count());
+    //if (!isRefData && gtf_tracking_verbose)
+	if (isRefData)
+		GMessage("  %d reference transcripts loaded.\n", gffr->gflst.Count());
+	else
+		if (!gtf_tracking_largeScale)
+			GMessage("  %d query transfrags loaded.\n", gffr->gflst.Count());
     int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, discardDups, qfidx,
     		             only_multiexon);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_parse_mRNAs");
 #endif
-	if (gtf_tracking_verbose && d>0) {
+	if (d>0) { //(gtf_tracking_verbose && d>0)
 	  if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
 	            else GMessage("  %d duplicate query transfrags discarded.\n",d);
-	  }
+	}
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs
 #ifdef HEAPROFILE
