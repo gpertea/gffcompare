@@ -668,6 +668,9 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	gffr->showWarnings(gtf_tracking_verbose);
 	//            keepAttrs=!isRefData,   mergeCloseExons   noExonAttrs=(isRefData || gtf_tracking_largeScale)
 	gffr->mergeCloseExons(true);
+	char* fbed=strifind(fname, ".bed");
+	if (fbed!=NULL && (size_t)(fbed-fname)>=strlen(fname)-6)
+	   gffr->isBED(true);
 	gffr->keepAttrs(!isRefData, isRefData || gtf_tracking_largeScale );
 	gffr->readAll();
 	//gffr->readAll(!isRefData,          true,        isRefData || gtf_tracking_largeScale);
