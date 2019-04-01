@@ -22,9 +22,9 @@ ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
   ifneq (,$(findstring static,$(MAKECMDGOALS)))
     LDFLAGS += -static-libstdc++ -static-libgcc
   endif
-  CXXFLAGS := -O3 -DNDEBUG $(CXXFLAGS)
+  CXXFLAGS := -O3 -DNDEBUG -std=c++0x $(CXXFLAGS)
 else # debug build
-  CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG
+  CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG -std=c++0x
   ifneq (,$(filter %memcheck %memdebug, $(MAKECMDGOALS)))
      #make memcheck : use the statically linked address sanitizer in gcc 4.9.x
      GCCVER49 := $(shell expr `g++ -dumpversion | cut -f1,2 -d.` \>= 4.9)
