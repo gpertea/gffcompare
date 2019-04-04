@@ -2,6 +2,7 @@
 
 bool gtf_tracking_verbose = false;
 bool gtf_tracking_largeScale=false; //many input Cufflinks files processed at once by cuffcompare, discard exon attributes
+
 int numQryFiles=0;
 
 int GXConsensus::count=0;
@@ -408,17 +409,23 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool
 	if (imax==0) { //single-exon mRNAs
 		if (contain_only) { //require strict boundary containment (a in b or b in a)
 			//but also that at least 80% of the largest one be covered
-		   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
+		   if (strictMatching)
+			   return (a.exons[0]->start==b.exons[0]->start &&
+			   						a.exons[0]->end==b.exons[0]->end);
+		   else
+			   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
 		           (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.8));
 		}
 		if (relaxed_singleExonMatch) {
 			return (singleExonTMatch(a,b,ovlen));
 		} else {
 			//same as contain_only, but stricter (at least 90% larger transcript coverage)
-			return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.9) ||
+			if (strictMatching)
+				return (a.exons[0]->start==b.exons[0]->start &&
+						a.exons[0]->end==b.exons[0]->end);
+			else
+			   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.9) ||
 			        (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.9));
-			//return (a.exons[0]->start==b.exons[0]->start &&
-			//		a.exons[0]->end==b.exons[0]->end);
 		}
 	}
 	if ( a.exons[imax]->start<b.exons[0]->end ||
@@ -434,10 +441,14 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool
 			return false; //intron mismatch
 		}
 	}
-	if (contain_only) //requires actual coordinate containing
-		     return ((a.start>=b.start && a.end<=b.end) ||
+	if (contain_only) {//requires actual coordinate containing
+		     if (strictMatching)
+		    	 return (a.exons[0]->start==b.exons[0]->start &&
+		    			 a.exons.Last()->end==b.exons.Last()->end);
+		     else return ((a.start>=b.start && a.end<=b.end) ||
 		           (b.start>=a.start && b.end<=a.end));
-		else return true;
+	}
+	else return true;
 }
 
 
@@ -495,7 +506,7 @@ void gatherRefLocOvls(GffObj& m, GLocus& rloc) {
 		if (ovlcode!=0) { //has some sort of overlap with r
 			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
 			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }
-			if (ovlcode=='c' || ovlcode=='=') //keep match/containment for each reference transcript
+			if (ovlcode=='c' || ovlcode=='=' || ovlcode=='~') //keep match/containment for each reference transcript
 				((CTData*)r->uptr)->addOvl(ovlcode,&m,olen);
 		}
 	}//for each ref in rloc

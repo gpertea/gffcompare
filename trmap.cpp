@@ -12,6 +12,7 @@ using std::cout;
 #define VERSION "0.10.6"
 
 bool simpleOvl=false;
+bool strictMatching=false;
 
 struct GSTree {
 	GIntervalTree it[3]; //0=unstranded, 1: + strand, 2 : - strand
@@ -20,22 +21,24 @@ struct GSTree {
 int main(int argc, char* argv[]) {
 	const std::string usage = std::string("trmap v" VERSION)+
 	" : transcript to reference mapping and overlap classifier.\nUsage:\n"+
-	"  trmap [-S] [-o <outfile>] <ref_gff> <query_gff>\n"+
+	"  trmap [-S] [-o <outfile>] [--strict-match] <ref_gff> <query_gff>\n"+
 	        "Positional arguments:\n"+
 			"  <ref_gff>    reference annotation file name (GFF/BED format)\n"+
 			"  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"+
 			"Options:\n"+
 			"  -o <outfile> write output to <outfile> instead of stdout\n"+
 			"  -S           report only simple reference overlap percentages, without\n"+
-			"               classification (one line per query)\n";
-	GArgs args(argc, argv, "help:hSo:");
+			"               classification (one line per query)\n"+
+			"  --strict-match : when intron chains match, the '=' overlap code is assigned\n"+
+			"               when all exons also match, otherwise assign the '~' code\n";
+	GArgs args(argc, argv, "help;strict-match;hSo:");
 	args.printError(usage.c_str(), true);
 	if (args.getOpt('h') || args.getOpt("help")) {
 		cout << usage;
 		exit(EXIT_SUCCESS);
 	}
 	if (args.getOpt('S')) simpleOvl=true;
-
+    if (args.getOpt("strict-match")) strictMatching=true;
 	GHash<GSTree> map_trees;
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
@@ -124,7 +127,7 @@ int main(int argc, char* argv[]) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
 						GffObj* r=(GffObj*)((*enu)[i]);
 						int ovlen=0;
-						char ovlcode=getOvlCode(*t, *r, ovlen);
+						char ovlcode=getOvlCode(*t, *r, ovlen, strictMatching);
 						fprintf(outFH, "%c\t", ovlcode);
 						r->printGTab(outFH);
 					}

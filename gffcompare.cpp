@@ -27,6 +27,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     of GTF files should be processed)\n\
 \n\
  -r reference annotation file (GTF/GFF)\n\
+ --strict-match : the match code '=' is only assigned when all exon boundaries\n\
+    match; code '~' is assigned for intron chain match or single-exon\n\
 \n\
  -R for -r option, consider only the reference transcripts that\n\
     overlap any of the input transfrags (Sn correction)\n\
@@ -39,7 +41,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     intron chain) within a single sample (disable \"annotation\" mode)\n\
  -S like -D, but stricter duplicate checking: only discard matching query\n\
     transfrags (same intron chain) if their boundaries are fully contained\n\
-    within other, larger or identical transfrags\n\
+    within other, larger or identical transfrags; if --strict-match is also\n\
+    given, exact matching of all exon boundaries is required\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\
@@ -96,7 +99,9 @@ bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
 bool qDupDiscard=false;
 bool qDupStrict=false;
-
+bool strictMatching=false; // really match *all* exon coords for '=' class code!
+                          // use '~' class code for intron-chain matches
+                          // (or fuzzy single-exon transcripts overlaps)
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
@@ -229,7 +234,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;gidnames;gnames;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
+		  "version;help;debug;gids;gidnames;gnames;strict-match;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -253,6 +258,7 @@ int main(int argc, char* argv[]) {
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
   qDupDiscard=(args.getOpt('D')!=NULL);
   qDupStrict=(args.getOpt('S')!=NULL);
+  strictMatching=(args.getOpt("strict-match")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt("chr-stats")!=NULL);
@@ -536,69 +542,6 @@ void show_exons(FILE* f, GffObj& m) {
     if (i==imax) fprintf(f,"%d-%d)",m.exons[i]->start, m.exons[i]->end);
             else fprintf(f,"%d-%d,",m.exons[i]->start, m.exons[i]->end);
     }
-}
-
-bool ichainMatch(GffObj* t, GffObj* r, bool& exonMatch, int fuzz=0) {
-  //t's intron chain is considered matching to reference r
-  //if r's intron chain is the same with t's chain
-  //OR IF fuzz!=0 THEN also accepts r's intron chain to be a SUB-chain of t's chain
-  exonMatch=false;
-  int imax=r->exons.Count()-1;
-  int jmax=t->exons.Count()-1;
-  if (imax==0 || jmax==0) {   //single-exon mRNAs
-     if (imax!=jmax) return false;
-     exonMatch=r->exons[0]->coordMatch(t->exons[0],fuzz);
-     /*if (exonMatch) return true;
-       else return (r->exons[0]->start>=t->exons[0]->start &&
-                    r->exons[0]->end<=t->exons[0]->end);*/
-     return exonMatch;
-     }
-
-  if (r->exons[imax]->start<t->exons[0]->end ||
-      t->exons[jmax]->start<r->exons[0]->end ) //intron chains do not overlap at all
-          {
-           return false;
-          }
-  //check intron overlaps
-  int i=1;
-  int j=1;
-  bool exmism=false; //any mismatch
-  while (i<=imax && j<=jmax) {
-     uint rstart=r->exons[i-1]->end;
-     uint rend=r->exons[i]->start;
-     uint tstart=t->exons[j-1]->end;
-     uint tend=t->exons[j]->start;
-     if (tend<rstart) { j++; continue; }
-     if (rend<tstart) { i++; continue; }
-     break; //here we have an intron overlap
-     }
-  if (i>1 || i>imax || j>jmax) {
-      //first ref intron not matching
-      //OR no intron match found at all
-      return false;
-      }
-  //from now on we expect intron matches up to imax
-  if (i!=j || imax!=jmax) {
-      exmism=true; //not all introns match, so obviously there's "exon" mismatch
-      //FIXME: fuzz!=0 determines acceptance of *partial* chain match
-      // but only r as a sub-chain of t, not the other way around!
-      if (jmax<imax) return false; // qry ichain cannot be a subchain of ref ichain
-      if (fuzz==0) return false;
-      }
-  for (;i<=imax && j<=jmax;i++,j++) {
-    if (abs((int)(r->exons[i-1]->end-t->exons[j-1]->end))>fuzz ||
-        abs((int)(r->exons[i]->start-t->exons[j]->start))>fuzz) {
-        return false; //intron mismatch found
-        }
-    }
-  //if we made it here, we have matching intron chains up to MIN(imax,jmax)
-  if (!exmism) {
-          //check terminal exons:
-          exonMatch = ( abs((int)(r->exons[0]->start-t->exons[0]->start))<=fuzz &&
-               abs((int)(r->exons[imax]->end-t->exons[jmax]->end))<=fuzz );
-          }
-        // else exonMatch is false
-  return true;
 }
 
 bool exon_match(GXSeg& r, GXSeg& q, uint fuzz=0) {
@@ -1731,14 +1674,24 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
 			 // because duplicate refs were discarded
 		  }
 	  */
-	  mdata->addOvl('=',rloc.mrnas[r], olen);
-	  ret=mdata->ovls.First()->mrna;
+	  int eqcode='=';
+	  if (strictMatching) {
+		  eqcode= (m.exons[0]->start==rloc.mrnas[r]->exons[0]->start &&
+			m.exons.Last()->end==rloc.mrnas[r]->exons.Last()->end) ? '=':'~';
+	  }
+	  mdata->addOvl(eqcode,rloc.mrnas[r], olen);
       //this must be called only for the head of an equivalency chain
       CTData* rdata=(CTData*)rloc.mrnas[r]->uptr;
-      rdata->addOvl('=',&m,olen);
+      rdata->addOvl(eqcode,&m,olen);
       //if (rdata->eqnext==NULL) rdata->eqnext=&m;
       }
     }
+ if (mdata->ovls.Count()>0) {
+	 if (strictMatching) {
+		 ret=(mdata->ovls.First()->code=='=') ? mdata->ovls.First()->mrna: NULL;
+	 }
+	 else ret=mdata->ovls.First()->mrna;
+ }
  if (ret!=NULL)
    mdata->eqref=ret;
  return ret;
@@ -1772,7 +1725,7 @@ for (int q=0;q<qcount-1;q++) { //for each qry dataset
                  (ni_d->eqlist==qi_d->eqlist || !singleExon)) continue;
           int ovlen=0;
           if ((ni_d->eqlist==qi_d->eqlist && qi_d->eqlist!=NULL) ||
-                  tMatch(*qi_t,*ni_t, ovlen, singleExon)) {
+                  tMatch(*qi_t,*ni_t, ovlen, singleExon, strictMatching)) {
              qi_d->joinEqList(ni_t);
              }
           }
