@@ -1674,7 +1674,7 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
 			 // because duplicate refs were discarded
 		  }
 	  */
-	  int eqcode='=';
+	  char eqcode='=';
 	  if (strictMatching) {
 		  eqcode= (m.exons[0]->start==rloc.mrnas[r]->exons[0]->start &&
 			m.exons.Last()->end==rloc.mrnas[r]->exons.Last()->end) ? '=':'~';
@@ -1686,16 +1686,15 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
       //if (rdata->eqnext==NULL) rdata->eqnext=&m;
       }
     }
- if (mdata->ovls.Count()>0) {
-	 if (strictMatching) {
-		 ret=(mdata->ovls.First()->code=='=') ? mdata->ovls.First()->mrna: NULL;
-	 }
-	 else ret=mdata->ovls.First()->mrna;
+ if (mdata->ovls.Count()>0 && mdata->ovls.First()->code=='=') {
+   ret=mdata->ovls.First()->mrna;
+   ovlen=mdata->ovls.First()->ovlen;
  }
+ //
  if (ret!=NULL)
    mdata->eqref=ret;
  return ret;
- }
+}
 
 
 void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* ts) {
