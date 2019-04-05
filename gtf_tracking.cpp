@@ -6,7 +6,6 @@ bool gtf_tracking_largeScale=false; //many input Cufflinks files processed at on
 int numQryFiles=0;
 
 bool qDupStrict=false;
-bool rDupStrict=false;
 bool strictMatching=false;
 bool noMergeCloseExons=false;
 bool debug=false;

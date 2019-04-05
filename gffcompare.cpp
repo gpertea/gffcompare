@@ -43,8 +43,6 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     or reference transcripts (same intron chain) if their boundaries are fully\n\
 	contained within other, larger or identical transfrags; if --strict-match\n\
     is also given, exact matching of all exon boundaries is required\n\
- --rdup-strict : like -S but for reference transcripts: only discard a\n\
-    matching transcript if it's also boundary contained or equal\n\
  --no-merge : disable close-exon merging (default: merge exons separated by\n\
 	\"introns\" shorter than 5 bases\n\
 \n\
@@ -241,7 +239,7 @@ int main(int argc, char* argv[]) {
 
   GArgs args(argc, argv,
 		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;"
-		  "rdup-strict;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
+		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -265,7 +263,6 @@ int main(int argc, char* argv[]) {
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
   qDupDiscard=(args.getOpt('D')!=NULL);
   qDupStrict=(args.getOpt('S')!=NULL);
-  rDupStrict=(args.getOpt("rdup-strict")!=NULL);
   strictMatching=(args.getOpt("strict-match")!=NULL);
   noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)

@@ -17,7 +17,6 @@ extern int numQryFiles;
 extern bool gtf_tracking_verbose;
 extern bool gtf_tracking_largeScale;
 extern bool qDupStrict;
-extern bool rDupStrict;
 extern bool strictMatching;
 extern bool noMergeCloseExons;
 extern bool debug;
