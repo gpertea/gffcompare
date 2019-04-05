@@ -13,11 +13,11 @@
 #include "GFaSeqGet.h"
 #include "GStr.h"
 
-//#define MAX_QFILES 10000
 extern int numQryFiles;
 extern bool gtf_tracking_verbose;
-extern bool qDupStrict;
 extern bool gtf_tracking_largeScale;
+extern bool qDupStrict;
+extern bool rDupStrict;
 extern bool strictMatching;
 extern bool noMergeCloseExons;
 extern bool debug;

@@ -5,6 +5,12 @@ bool gtf_tracking_largeScale=false; //many input Cufflinks files processed at on
 
 int numQryFiles=0;
 
+bool qDupStrict=false;
+bool rDupStrict=false;
+bool strictMatching=false;
+bool noMergeCloseExons=false;
+bool debug=false;
+
 int GXConsensus::count=0;
 
 char* getGSeqName(int gseq_id) {
@@ -26,7 +32,7 @@ bool betterRef(GffObj* a, GffObj* b) {
      }
  }
 
-GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool strictMatch=false) {
+GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool matchContain=false) {
  //mrnas MUST be sorted by start coordinate
  //this is optimized for when mrnas list is being populated, in sorted order
  //as it starts scanning from the end of the list
@@ -45,7 +51,7 @@ GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool strictMatch=f
            }
       if (omrna.start>m->end) continue; //this should never be the case if nidx was found with qsearch_mrnas(m->end)
       //locus overlap here:
-      if (tMatch(*m, omrna, ovlen, !strictMatch, strictMatch)) {
+      if (tMatch(*m, omrna, ovlen, !matchContain, matchContain)) {
              dupidx=i;
              return mrnas[i];
       }
@@ -416,7 +422,7 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool
 			   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
 		           (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.8));
 		}
-		if (relaxed_singleExonMatch) {
+		if (relaxed_singleExonMatch) { //contain_only was already tested
 			return (singleExonTMatch(a,b,ovlen));
 		} else {
 			//same as contain_only, but stricter (at least 90% larger transcript coverage)
@@ -441,6 +447,7 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool
 			return false; //intron mismatch
 		}
 	}
+	//--- intron chain is matching ---
 	if (contain_only) {//requires actual coordinate containing
 		     if (strictMatching)
 		    	 return (a.exons[0]->start==b.exons[0]->start &&

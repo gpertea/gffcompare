@@ -43,6 +43,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     or reference transcripts (same intron chain) if their boundaries are fully\n\
 	contained within other, larger or identical transfrags; if --strict-match\n\
     is also given, exact matching of all exon boundaries is required\n\
+ --rdup-strict : like -S but for reference transcripts: only discard a\n\
+    matching transcript if it's also boundary contained or equal\n\
  --no-merge : disable close-exon merging (default: merge exons separated by\n\
 	\"introns\" shorter than 5 bases\n\
 \n\
@@ -80,7 +82,6 @@ Options for the combined GTF output file:\n\
  --gnames   : make gene_name include reference gene_name values, if any\n\
 */
 
-bool debug=false;
 bool perContigStats=false; // -S to enable separate stats for every contig/chromosome
 //bool generic_GFF=false;
 //true if -G: won't discard intron-redundant transfrags
@@ -101,12 +102,11 @@ bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_na
 bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
 bool qDupDiscard=false;
-bool qDupStrict=false;
 
-bool strictMatching=false; // really match *all* exon coords for '=' class code!
-                          // use '~' class code for intron-chain matches
-                          // (or fuzzy single-exon transcripts overlaps)
-bool noMergeCloseExons=false; //prevent joining close exons?
+//strictMatching=false; // really match *all* exon coords for '=' class code!
+          // use '~' class code for intron-chain matches
+          // (or fuzzy single-exon transcripts overlaps)
+//noMergeCloseExons=false; //prevent joining close exons?
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
@@ -240,7 +240,8 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
+		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;"
+		  "rdup-strict;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -264,6 +265,7 @@ int main(int argc, char* argv[]) {
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
   qDupDiscard=(args.getOpt('D')!=NULL);
   qDupStrict=(args.getOpt('S')!=NULL);
+  rDupStrict=(args.getOpt("rdup-strict")!=NULL);
   strictMatching=(args.getOpt("strict-match")!=NULL);
   noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
