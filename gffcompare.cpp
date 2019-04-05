@@ -1913,8 +1913,8 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
 			if (qtdata->eqref==NULL) { //find any rloc overlap -- class code
 				if (qt.overlap(rloc.start, rloc.end)) {
 					rmatch=findRefMatch(qt, rloc, rovlen);
-					if (rmatch==NULL
-							&& ((CTData*)qt.uptr)->ovls.Count()==0) {
+					if (rmatch==NULL) //&& ((CTData*)qt.uptr)->ovls.Count()==0)
+						{
 						//not an ichain match, look for other codes
 						gatherRefLocOvls(qt, rloc);
 					}
@@ -2383,13 +2383,13 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
    for (int rl=0; rl < loctrack.rloci.Count(); rl++) {
       findTRMatch(loctrack, qcount, *(loctrack.rloci[rl]));
       //find matching reference annotation for this xcluster and assign class codes to transfrags
-      }
-    GList<GXLocus> xloci(false,false,false);
-    buildXLoci(loctrack, qcount, gtrack, strand, &xloci);
-    //the newly created xloci are in xloci
-    umrnasXStrand(xloci, gtrack);
-    //also merge these xloci into the global list of xloci
-    for (int l=0; l < xloci.Count(); l++) {
+   }
+   GList<GXLocus> xloci(false,false,false);
+   buildXLoci(loctrack, qcount, gtrack, strand, &xloci);
+   //the newly created xloci are in xloci
+   umrnasXStrand(xloci, gtrack);
+   //also merge these xloci into the global list of xloci
+   for (int l=0; l < xloci.Count(); l++) {
        if (xloci[l]->strand=='+') {
            gtrack.xloci_f.Add(xloci[l]);
            }
@@ -2397,8 +2397,8 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
               gtrack.xloci_r.Add(xloci[l]);
               }
             else gtrack.xloci_u.Add(xloci[l]);
-       }
-    }//for each xcluster
+   }
+ }//for each xcluster
 }
 
 
