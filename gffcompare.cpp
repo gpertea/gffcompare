@@ -40,9 +40,9 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -D discard \"duplicate\" query transfrags (i.e. those with the same\n\
     intron chain) within a single sample (disable \"annotation\" mode)\n\
  -S like -D, but stricter duplicate checking: only discard matching query\n\
-    transfrags (same intron chain) if their boundaries are fully contained\n\
-    within other, larger or identical transfrags; if --strict-match is also\n\
-    given, exact matching of all exon boundaries is required\n\
+    or reference transcripts (same intron chain) if their boundaries are fully\n\
+	contained within other, larger or identical transfrags; if --strict-match\n\
+    is also given, exact matching of all exon boundaries is required\n\
  --no-merge : disable close-exon merging (default: merge exons separated by\n\
 	\"introns\" shorter than 5 bases\n\
 \n\
@@ -367,7 +367,8 @@ int main(int argc, char* argv[]) {
     if (f_ref==NULL) GError("Error opening reference gff: %s\n",s.chars());
     haveRefs=true;
     if (gtf_tracking_verbose) GMessage("Loading reference transcripts..\n");
-    read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(), (multiexonrefs_only || multiexon_only));
+    read_mRNAs(f_ref, ref_data, &ref_data, true, -1, s.chars(),
+    		(multiexonrefs_only || multiexon_only));
     haveRefs=(ref_data.Count()>0);
     //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
   }
