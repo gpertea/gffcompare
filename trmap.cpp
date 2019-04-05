@@ -54,8 +54,9 @@ int main(int argc, char* argv[]) {
 
 	//always good to check if the file is actually there and can be read
 	if (fr==NULL) GError("Error: could not open reference annotation file (%s)!\n", ref_file);
-	const char* fext=getFileExt(ref_file);
+
 	GffReader myR(fr, true, true);
+	const char* fext=getFileExt(ref_file);
 	if (Gstricmp(fext, "bed")==0) myR.isBED();
 	GffObj* t=NULL;
 	GPVec<GffObj> toFree(true);

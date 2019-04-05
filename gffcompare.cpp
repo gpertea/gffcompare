@@ -43,6 +43,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transfrags (same intron chain) if their boundaries are fully contained\n\
     within other, larger or identical transfrags; if --strict-match is also\n\
     given, exact matching of all exon boundaries is required\n\
+ --no-merge : disable close-exon merging (default: merge exons separated by\n\
+	\"introns\" shorter than 5 bases\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\
@@ -56,8 +58,9 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
  --chr-stats: the .stats file will show summary and accuracy data\n\
    for each reference contig/chromosome separately\n\
- --debug enables -V and generates additional files: \n\
-    <outprefix>.Qdiscarded.lst and <outprefix>.missed_introns.gtf\n\
+ --debug : enables -V and generates additional files: \n\
+    <outprefix>.Q_discarded.lst, <outprefix>.missed_introns.gff,\n\
+    <outprefix>.R_missed.lst\n\
 \n\
 Options for the combined GTF output file:\n\
  -p the name prefix to use for consensus transcripts in the \n\
@@ -99,9 +102,11 @@ bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
 bool qDupDiscard=false;
 bool qDupStrict=false;
+
 bool strictMatching=false; // really match *all* exon coords for '=' class code!
                           // use '~' class code for intron-chain matches
                           // (or fuzzy single-exon transcripts overlaps)
+bool noMergeCloseExons=false; //prevent joining close exons?
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
@@ -189,7 +194,8 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
 #define FRCLOSE(fh) if (fh!=NULL && fh!=stdin) fclose(fh)
 
 FILE* f_mintr=NULL; //missed ref introns (debug only)
-FILE* f_qdisc=NULL; //missed ref introns (debug only)
+FILE* f_qdisc=NULL; //discarded query transfrags (debug only)
+FILE* f_rmiss=NULL; //missed ref transcripts (debug only)
 
 bool multiexon_only=false;
 bool multiexonrefs_only=false;
@@ -234,7 +240,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;gidnames;gnames;strict-match;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
+		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -259,6 +265,7 @@ int main(int argc, char* argv[]) {
   qDupDiscard=(args.getOpt('D')!=NULL);
   qDupStrict=(args.getOpt('S')!=NULL);
   strictMatching=(args.getOpt("strict-match")!=NULL);
+  noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt("chr-stats")!=NULL);
@@ -384,23 +391,21 @@ int main(int argc, char* argv[]) {
 
   if (debug) { //create a few more files potentially useful for debugging
         s=outbasename;
-        s.append(".missed_introns.gtf");
+        s.append(".missed_introns.gff");
         f_mintr=fopen(s.chars(),"w");
         if (f_mintr==NULL) GError("Error creating file %s!\n",s.chars());
-        if (reduceQrys) {
+
+        s=outbasename;
+        s.append(".R_missed.gff");
+        f_rmiss=fopen(s.chars(),"w");
+        if (f_rmiss==NULL) GError("Error creating file %s!\n",s.chars());
+
+        if (reduceQrys) { //only if -Q option was used
            s=outbasename;
-           s.append(".Qdiscarded.lst");
+           s.append(".Q_discarded.lst");
            f_qdisc=fopen(s.chars(),"w");
            if (f_qdisc==NULL) GError("Error creating file %s!\n",s.chars());
         }
-        /*
-        s=outbasename;
-        s.append(".noTP_introns.gtf");
-        f_nintr=fopen(s.chars(),"w");
-        s=outbasename;
-        s.append(".wrong_Qintrons.gtf");
-        f_qintr=fopen(s.chars(),"w");
-        */
   }
 
   f_out=fopen(outstats, "w");
@@ -507,6 +512,7 @@ int main(int argc, char* argv[]) {
   }//for each input file
   if (f_mintr!=NULL) fclose(f_mintr);
   if (f_qdisc!=NULL) fclose(f_qdisc);
+  if (f_rmiss!=NULL) fclose(f_rmiss);
   gseqtracks.setSorted(&cmpGTrackByName);
   if (gtf_tracking_verbose && numQryFiles>1)
 	   GMessage("Tracking transcripts across %d query file(s)..\n", numQryFiles);
@@ -576,19 +582,18 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
    GLocus* locus=loci[l];
    locus->creset();
    for (int j=0;j<refloci.Count();j++) {
-     //if (refloci[j]->start>locus->end) break;
      if (refloci[j]->start>locus->end) {
-         if (refloci[j]->start-locus->end > GFF_MAX_LOCUS) break;
+         if (refloci[j]->start > locus->end + GFF_MAX_LOCUS) break;
          continue;
-         }
+     }
      if (locus->start>refloci[j]->end) continue;
-     // then we must have overlap here:
-     //if (locus->overlap(refloci[j]->start, refloci[j]->end)) {
+     //must check for proper exon overlap:
+     if (locus->exonOverlap(*refloci[j])) {
         locus->cmpovl.Add(refloci[j]);
         refloci[j]->cmpovl.Add(locus);
-        //}
-     }//for each reflocus
-   } //for each locus
+     }
+   }//for each reflocus
+ } //for each locus
 
  //create corresponding "superloci" from transitive overlapping between loci and ref
  for (int l=0;l<loci.Count();l++) {
@@ -596,7 +601,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   GSuperLocus* super=new GSuperLocus();
   super->qfidx=qfidx;
   //try to find all other loci connected to this locus loci[l]
-  GList<GLocus> lstack(false,false,false);  //traversal stack
+  GPVec<GLocus> lstack(false);  //traversal stack
   lstack.Push(loci[l]);
   while (lstack.Count()>0) {
       GLocus* locus=lstack.Pop();
@@ -609,16 +614,17 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
           super->addRlocus(*rloc);
           rloc->v=1;
           for (int ll=0;ll<rloc->cmpovl.Count();ll++) {
-              if (rloc->cmpovl[ll]->v==0) lstack.Push(rloc->cmpovl[ll]);
-              }
-           }
-        } //for each overlapping reflocus
-      } //while linking
+              if (rloc->cmpovl[ll]->v==0)
+            	  lstack.Push(rloc->cmpovl[ll]);
+          }
+        }
+      } //for each overlapping reflocus
+  } //while linking
 
   if (super->qloci.Count()==0) {
     delete super;
     continue; //try next query loci
-    }
+  }
   //--here we have a "superlocus" region data on both qry and ref
   // -- analyze mexons matching (base level metrics)
   cmpdata.Add(super);
@@ -628,10 +634,10 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
       }
   for (int x=0;x<super->rmexons.Count();x++) {
     super->rbases_all += super->rmexons[x].end-super->rmexons[x].start+1;
-    }
+  }
   for (int x=0;x<super->qmexons.Count();x++) {
     super->qbases_all += super->qmexons[x].end-super->qmexons[x].start+1;
-    }
+  }
   int i=0; //locus mexons
   int j=0; //refmexons
   while (i<super->qmexons.Count() && j<super->rmexons.Count()) {
@@ -648,7 +654,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
      super->baseTP+=ovlen; //qbases_cov
      if (iend<jend) i++;
                else j++;
-     } //while mexons ovl search
+  } //while mexons ovl search
   /* if (reduceRefs) {
     super->baseFP=super->qbases_all-super->baseTP;
     super->baseFN=super->rbases_all-super->baseTP;
@@ -704,18 +710,18 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   //-- intron level stats:
   //query:
   int* qinovl=NULL; //flags for qry introns with at least some ref overlap
-  int* qtpinovl=NULL; //flags for qry introns with perfect ref overlap
+  int* qtpinovl=NULL; //flags for qry introns with ref intron match
   if (super->qintrons.Count()>0) {
-   GCALLOC(qinovl,super->qintrons.Count()*sizeof(int));
-   GCALLOC(qtpinovl,super->qintrons.Count()*sizeof(int));
-   }
+    GCALLOC(qinovl,super->qintrons.Count()*sizeof(int));
+    GCALLOC(qtpinovl,super->qintrons.Count()*sizeof(int));
+  }
   //-- reference:
   int* rinovl=NULL; //flags for ref introns with qry overlap
   int* rtpinovl=NULL; //ref introns with perfect qry intron overlap
   if (super->rintrons.Count()>0) {
-   GCALLOC(rinovl,super->rintrons.Count()*sizeof(int));
-   GCALLOC(rtpinovl,super->rintrons.Count()*sizeof(int));
-   }
+    GCALLOC(rinovl,super->rintrons.Count()*sizeof(int));
+    GCALLOC(rtpinovl,super->rintrons.Count()*sizeof(int));
+  }
   for (int i=0;i<super->qintrons.Count();i++) {
     uint istart=super->qintrons[i].start;
     uint iend=super->qintrons[i].end;
@@ -727,37 +733,32 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
       //--- overlap here between qintrons[i] and rintrons[j]
       qinovl[i]++;
       rinovl[j]++;
-      /*if (super->qintrons[i].coordMatch(&super->rintrons[j],5)) {
-         super->intronATP++;*/
-         if (super->qintrons[i].coordMatch(&super->rintrons[j])) {
-             super->intronTP++;
-             qtpinovl[i]++;
-             rtpinovl[j]++;
-             } //exact match
-         //} //fuzzy match
-      } //ref intron loop
-   } //qry intron loop
-  super->m_introns=0; //ref introns with no query overlap
-  super->w_introns=0; //qry introns with no ref overlap
+      if (super->qintrons[i].coordMatch(&super->rintrons[j])) {
+         super->intronTP++;
+         qtpinovl[i]++;
+         rtpinovl[j]++;
+      } //exact match
+    } //ref intron loop
+  } //qry intron loop
+  super->m_introns=0; //ref introns with no query overlap (missed introns)
+  super->w_introns=0; //qry introns with no ref overlap (wrong introns)
   for (int x=0;x<super->qintrons.Count();x++) {
-       if (qinovl[x]==0) { super->w_introns++;
-                 //qry introns with no ref intron overlap AT ALL
-                 super->i_qwrong.Add(super->qintrons[x]);
-                 }
-          else
-             if (qtpinovl[x]==0) {
-               super->i_qnotp.Add(super->qintrons[x]);
-             }
-       }
+       if (qinovl[x]==0) {
+    	   super->w_introns++;
+           //qry introns with no ref intron overlap AT ALL
+           super->i_qwrong.Add(super->qintrons[x]);
+       } else if (qtpinovl[x]==0) {
+             super->i_qnotp.Add(super->qintrons[x]);
+           }
+  }
   for (int x=0;x<super->rintrons.Count();x++) {
        if (rinovl[x]==0) { //no intron overlap at all
              super->m_introns++;
              super->i_missed.Add(super->rintrons[x]);
-             }
-       else if (rtpinovl[x]==0) { //no perfect intron match
+       } else if (rtpinovl[x]==0) { //no perfect intron match
             super->i_notp.Add(super->rintrons[x]);
-            }
-       }
+          }
+  }
   GFREE(rinovl);
   GFREE(rtpinovl);
   GFREE(qinovl);
@@ -777,7 +778,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 		  if (jend<istart) continue;
 		  //--- overlap here --
 		  //bool exonMatch=false;
-		  if (super->qmrnas[i]->udata & 2) continue; //already found a good matching ref
+		  if (super->qmrnas[i]->udata & 2) continue; //already found a matching ref for this
 		  GLocus* qlocus=((CTData*)super->qmrnas[i]->uptr)->locus;
 		  GLocus* rlocus=((CTData*)super->rmrnas[j]->uptr)->locus;
 		  int ovlen=0;
@@ -790,52 +791,30 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 			  super->mrnaTP++;
 			  qlocus->mrnaTP++;
 			  rlocus->mrnaTP++;
-			  /*super->mrnaATP++;
-			  qlocus->mrnaATP++;
-			  rlocus->mrnaATP++;*/
 			  if (super->qmrnas[i]->exons.Count()>1) {
 				  super->ichainTP++;
 				  qlocus->ichainTP++;
 				  rlocus->ichainTP++;
-				  /*super->ichainATP++;
-				  qlocus->ichainATP++;
-				  rlocus->ichainATP++;*/
 			  }
 		  }
-		  /* else { //not an '=' match, look for a fuzzy coord match
-			  if (amatched_refs[j]) continue; //this reference already counted as a TP fuzzy match
-			  if (super->qmrnas[i]->udata & 1) continue; //fuzzy match already found
-			  if (ichainMatch(super->qmrnas[i],super->rmrnas[j],exonMatch, 5)) {
-				  //NB: also accepts the possibility that ref's i-chain be a subset of qry's i-chain
-				  super->qmrnas[i]->udata|=1;
-				  amatched_refs[j]++;
-				  if (super->qmrnas[i]->exons.Count()>1) {
-					  super->ichainATP++;
-					  qlocus->ichainATP++;
-					  rlocus->ichainATP++;
-				  }
-				  if (exonMatch) {
-					  super->mrnaATP++;
-					  qlocus->mrnaATP++;
-					  rlocus->mrnaATP++;
-				  }
-			  }
-		  } //fuzzy match check */
 	  } //ref loop
   } //qry loop
+  //now print unmatched references, if requested
+  if (f_rmiss!=NULL) {
+	  for (int i=0;i<super->rmrnas.Count();i++) {
+		  if (matched_refs[i]==0)
+			  super->rmrnas[i]->printGxf(f_rmiss, pgffAny);
+	  }
+  }
   for (int ql=0;ql<super->qloci.Count();ql++) {
       if (super->qloci[ql]->mrnaTP>0)
                  super->locusQTP++;
-      //if (super->qloci[ql]->mrnaATP>0)
-      //          super->locusAQTP++;
-      }
+  }
   for (int rl=0;rl<super->rloci.Count();rl++) {
       if (super->rloci[rl]->mrnaTP >0 )
                  super->locusTP++;
-      //if (super->rloci[rl]->mrnaATP>0)
-      //           super->locusATP++;
-      }
-  }//for each unlinked locus
+  }
+ }//for each unlinked locus
 }
 
 //look for qry data for a specific genomic sequence

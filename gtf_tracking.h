@@ -19,6 +19,7 @@ extern bool gtf_tracking_verbose;
 extern bool qDupStrict;
 extern bool gtf_tracking_largeScale;
 extern bool strictMatching;
+extern bool noMergeCloseExons;
 extern bool debug;
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
@@ -513,7 +514,7 @@ public:
 			uint jend=loc.mexons[j].end;
 			if (iend<jstart) { i++; continue; }
 			if (jend<istart) { j++; continue; }
-			//exon overlap found if we're here:
+			//exon overlap found
 			return true;
 		}
 		return false;
