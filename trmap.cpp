@@ -9,7 +9,7 @@
 
 using std::cout;
 
-#define VERSION "0.10.6"
+#define VERSION "0.11.2"
 
 bool simpleOvl=false;
 bool strictMatching=false;
