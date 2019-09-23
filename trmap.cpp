@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
 	GffObj* t=NULL;
 	GPVec<GffObj> toFree(true);
 	while ((t=myR.readNext())!=NULL) {
+		if (t->exons.Count()==0) continue; //skip exonless entities (e.g. genes)
 		GSTree* cTree=map_trees[t->getGSeqName()];
 		if (cTree==NULL) {
 			cTree=new GSTree();
@@ -98,6 +99,7 @@ int main(int argc, char* argv[]) {
 		//if (map_trees.count(t->getGSeqName())==0) continue;
 		const char* gseq=t->getGSeqName();
 		if (!map_trees.hasKey(gseq)) continue;
+		if (t->exons.Count()==0) continue; //only work with properly defined transcripts
 		GVec<int> sidx;
 		int v=0;
 		sidx.Add(v); //always search the '.' strand
