@@ -13,10 +13,12 @@ using std::cout;
 
 bool simpleOvl=false;
 bool strictMatching=false;
+bool showCDS=false;
 
 struct GSTree {
 	GIntervalTree it[3]; //0=unstranded, 1: + strand, 2 : - strand
 };
+
 
 int main(int argc, char* argv[]) {
 	const std::string usage = std::string("trmap v" VERSION)+
@@ -29,16 +31,18 @@ int main(int argc, char* argv[]) {
 			"  -o <outfile> write output to <outfile> instead of stdout\n"+
 			"  -S           report only simple reference overlap percentages, without\n"+
 			"               classification (one line per query)\n"+
+			"  --show-cds   add CDS:start:end info to all output transcripts\n"+
 			"  --strict-match : when intron chains match, the '=' overlap code is assigned\n"+
 			"               when all exons also match, otherwise assign the '~' code\n";
-	GArgs args(argc, argv, "help;strict-match;hSo:");
+	GArgs args(argc, argv, "help;strict-match;show-cds;hSo:");
 	args.printError(usage.c_str(), true);
 	if (args.getOpt('h') || args.getOpt("help")) {
 		cout << usage;
 		exit(EXIT_SUCCESS);
 	}
 	if (args.getOpt('S')) simpleOvl=true;
-    if (args.getOpt("strict-match")) strictMatching=true;
+	if (args.getOpt("strict-match")) strictMatching=true;
+	if (args.getOpt("show-cds")) showCDS=true;
 	GHash<GSTree> map_trees;
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
@@ -125,6 +129,7 @@ int main(int argc, char* argv[]) {
 				} else {
 					fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 					t->printExonList(outFH);
+					if (showCDS && t->hasCDS()) fprintf(outFH, " CDS:%d:%d", t->CDstart, t->CDend);
 					fprintf(outFH, "\n");
 					for (int i=0; i<enu->Size(); ++i) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
@@ -132,7 +137,12 @@ int main(int argc, char* argv[]) {
 						int ovlen=0;
 						char ovlcode=getOvlCode(*t, *r, ovlen, strictMatching);
 						fprintf(outFH, "%c\t", ovlcode);
-						r->printGTab(outFH);
+						//r->printGTab(outFH);
+						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
+							r->start, r->end, r->getID());
+						r->printExonList(outFH);
+						if (showCDS && r->hasCDS()) fprintf(outFH, "\tCDS:%d:%d", r->CDstart, r->CDend);
+						fprintf(outFH, "\n");
 					}
 				}
 			}
