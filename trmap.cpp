@@ -9,7 +9,7 @@
 
 using std::cout;
 
-#define VERSION "0.11.2"
+#define VERSION "0.11.4"
 
 bool simpleOvl=false;
 bool strictMatching=false;
@@ -129,7 +129,10 @@ int main(int argc, char* argv[]) {
 				} else {
 					fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 					t->printExonList(outFH);
-					if (showCDS && t->hasCDS()) fprintf(outFH, " CDS:%d:%d", t->CDstart, t->CDend);
+					if (showCDS && t->hasCDS()) {
+					  fprintf(outFH, " CDS:");
+					  t->printCDSList(outFH);
+					}
 					fprintf(outFH, "\n");
 					for (int i=0; i<enu->Size(); ++i) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
@@ -141,7 +144,10 @@ int main(int argc, char* argv[]) {
 						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
 						r->printExonList(outFH);
-						if (showCDS && r->hasCDS()) fprintf(outFH, "\tCDS:%d:%d", r->CDstart, r->CDend);
+						if (showCDS && r->hasCDS()) {
+						  fprintf(outFH, "\tCDS:");
+						  r->printCDSList(outFH);
+						}
 						fprintf(outFH, "\n");
 					}
 				}
