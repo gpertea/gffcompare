@@ -141,8 +141,6 @@ class GFastaHandler {
      }
 };
 
-
-
 bool betterRef(GffObj* a, GffObj* b); //for better CovLink reference ranking
 
 class GLocus;
@@ -1082,7 +1080,7 @@ class GXConsensus:public GSeg {
    char* aa;
    int aalen;
    GXConsensus* contained; //if contained into another GXConsensus
-   //list of ichain-matching query (cufflinks) transcripts that contributed to this consensus
+   //list of ichain-matching query transcripts that contributed to this consensus
    GList<GffObj> qchain;
    GXConsensus(GffObj* c, CEqList* qlst, GffObj* r=NULL, char rcode=0)
                    :qchain(false,false,false) {
@@ -1315,10 +1313,11 @@ class GXLocus:public GSeg {
 	    return t_contains(*a, *b, keepAltTSS, intron_poking) ?  1 : 0;
    else return t_contains(*b, *a, keepAltTSS, intron_poking) ? -1 : 0;
   }
-
+ /*
  void addXCons(GXConsensus* t) {
   tcons.Add(t);
-  }
+ }
+ */
 
 }; //GXLocus
 

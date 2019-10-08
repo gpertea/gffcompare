@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.11.4"
+#define VERSION "0.11.5"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
   // clean up
   for (int i=0;i<numQryFiles;i++) {
     delete qrysdata[i];
-    }
+  }
   GFREE(qrysdata);
   GFREE(tfiles);
   GFREE(rtfiles);
@@ -1070,12 +1070,15 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
    "%s\t%s\ttranscript\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\";"  ,
    xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->start, xc->tcons->end, xc->tcons->strand,
      t_id.chars(), g_id.chars());
- if (gene_name.is_empty() && xc->ref) {
-    gene_name=xc->ref->getGeneName();
-    if (gene_name.is_empty())
-    	gene_name=xc->ref->getGeneID(); //sure we want this?
+ GStr ref_gene_name;
+ GStr ref_gene_id;
+ if (gene_name.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<15) {
+	//TODO: what if we want to override existing one?
+    ref_gene_name=xc->ref->getGeneName();//get the gene name from this overlapping reference
+    if (ref_gene_name.is_empty())
+    	ref_gene_name=xc->ref->getGeneID(); //last resort: use reference gene ID (might be meaningless!)
+    gene_name=ref_gene_name;
  }
- //if (gene_name.is_empty() && xc->tcons->getGeneName())
  if (!gene_name.is_empty())
 	 fprintf (fc, " gene_name \"%s\";", gene_name.chars());
 
@@ -1083,9 +1086,25 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
 	 fprintf(fc, " xloc \"%s\";",xloc.chars());
 
  if (gffAnnotate) {
-	 //preserve ref_gene_id attribute
+	 //preserve ref_gene_id and ref_gene_name attributes if found, or replace them with new ones!
 	 char* s=xc->tcons->getAttr("ref_gene_id", true);
-	 if (s) fprintf(fc, " ref_gene_id \"%s\";", s);
+	 if (s) fprintf(fc, " ref_gene_id \"%s\";", s); //TODO: what if we want to override existing one?
+	 else if (haveRefs) {
+		   if (ref_gene_id.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<CLASSCODE_OVL_RANK) {
+		     ref_gene_id=xc->ref->getGeneID();//get the gene name from this overlapping reference
+		   }
+	      if (!ref_gene_id.is_empty() && ref_gene_id!=xc->tcons->getGeneID())
+	        fprintf(fc, " ref_gene_id \"%s\";",ref_gene_id.chars());
+	 }
+	 s=xc->tcons->getAttr("ref_gene_name", true);
+	 if (s) fprintf(fc, " ref_gene_name \"%s\";", s); //TODO: unless we want to override it !
+	 else if (haveRefs) {
+		   if (ref_gene_name.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<CLASSCODE_OVL_RANK) {
+		     ref_gene_name=xc->ref->getGeneName();//get the gene name from this overlapping reference
+		   }
+	      if (!ref_gene_name.is_empty() && ref_gene_name!=gene_name)
+	        fprintf(fc, " ref_gene_name \"%s\";",ref_gene_name.chars());
+	 }
  }
  if (gffAnnotate) {
 	      if (xc->contained) {
@@ -1119,6 +1138,9 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
  }
  if (xc->tss_id>0) fprintf(fc, " tss_id \"TSS%d\";",xc->tss_id);
  if (xc->p_id>0) fprintf(fc, " p_id \"P%d\";",xc->p_id);
+ if (numQryFiles>1) {
+	 fprintf(fc, " num_samples \"%d\";",xc->qchain.Count());
+ }
  fprintf(fc,"\n");
  //now print exons
  for (int i=0;i<xc->tcons->exons.Count();i++) {
@@ -1678,9 +1700,9 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
 
 void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* ts) {
  GXConsensus* c=new GXConsensus(tcons, ts, ref, ovlcode);
- //xloc->tcons.Add(c);
- //this will also check c against the other tcons for containment:
- xloc->addXCons(c);
+ xloc->tcons.Add(c);
+ //--this will also check c against the other tcons for containment?:
+ //--xloc->addXCons(c);
 }
 
 void findTMatches(GTrackLocus& loctrack, int qcount) {
@@ -1757,16 +1779,6 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 					if (((CTData*)m->uptr)->ovls.Count()>0)
 						ref=((CTData*)m->uptr)->ovls[0]->mrna;
 				}
-				//char ocode=((CTData*)m->uptr)->getBestCode();
-				//assign the "best" ovlcode according to class code ranking:
-				//if (ocode && COvLink::coderank(ocode)<COvLink::coderank(ovlcode)) {
-				//	ovlcode=ocode;
-				//	ovlcode_change=true;
-				//	tcons_bycode=m;
-				//}
-				/*if (ocode && ovlcode!='=' && ovlcode!='.' && ocode!=ovlcode) {
-				      ovlcode='.'; //non-uniform ovlcode, don't know what to use
-				}*/
 			}
 			//if (ovlcode_change && tcons!=tcons_bycode)
 			//	tcons=tcons_bycode;
@@ -1810,25 +1822,6 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 			CTData* mdata=(CTData*)m->uptr;
 
 			int lastpq=-1;
-			/*
-      for (int ptab=mdata->qset-lastpq; ptab>0;ptab--)
-             if (ptab>1) fprintf(ft,"\t-");
-                    else fprintf(ft,"\t");
-      lastpq=mdata->qset;
-      fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-          iround(m->gscore/10), mdata->FPKM, mdata->conf_lo, mdata->conf_hi, mdata->cov, m->covlen);
-      //traverse linked list of matching transcripts
-      while (mdata->eqnext!=NULL) {
-         m=mdata->eqnext;
-         mdata=(CTData*)m->uptr;
-         for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
-             if (ptab>1) fprintf(ft,"\t-");
-                    else fprintf(ft,"\t");
-         lastpq = mdata->qset;
-         fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-            iround(m->gscore/10), mdata->FPKM,mdata->conf_lo,mdata->conf_hi,mdata->cov, m->covlen);
-         } //traverse and print row
-			 */
 			eqchain->setUnique(false);
 			eqchain->setSorted((GCompareProc*) cmpTData_qset);
 
@@ -2500,7 +2493,7 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
          printITrack(f_itrack, gseqtrack.qdata[q]->umrnas, qcount, cnum);
          }
     //print XLoci and XConsensi within each xlocus
-    //also TSS clustering and protein ID assignment for XConsensi
+    //also TSS clustering assignment for XConsensi
     printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, fredundant); //faseq, fredundant);
     printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, fredundant); //faseq, fredundant);
     printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, fredundant); //faseq, fredundant);
