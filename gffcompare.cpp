@@ -292,13 +292,16 @@ int main(int argc, char* argv[]) {
 	  delete lr;
 	  //if (qryfiles.Count()>10)
 	  gtf_tracking_largeScale=true;
+	  tmapFiles=false;
   }
   else {
 	  numQryFiles=args.startNonOpt();
 	  char *infile=NULL;
 	  if (numQryFiles>0) {
-		  if (numQryFiles>6)
+		  if (numQryFiles>6) {
 			  gtf_tracking_largeScale=true;
+			  tmapFiles=false;
+		  }
 		  while ((infile=args.nextNonOpt())!=NULL) {
 			  if (!fileExists(infile)) GError("Error: cannot locate input file: %s\n", infile);
 			  qryfiles.Add(new GStr(infile));
