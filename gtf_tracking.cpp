@@ -267,7 +267,7 @@ int parse_mRNAs(GfList& mrnas,
 		   if (m->strand=='.') {
 		     //unknown strand - discard from reference set (!)
 			 if (gtf_tracking_verbose)
-				 GMessage("Warning: reference transcript %s has undetermined strand, discarded.\n");
+				 GMessage("Warning: reference transcript %s has undetermined strand, discarded.\n", m->getID());
 		     continue;
 		   }
 		   total_kept++;
@@ -769,8 +769,12 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	if (fdis!=NULL) fclose(fdis);
 	if (frloci!=NULL) fclose(frloci);
 	if (initial_unoriented || final_unoriented) {
-	  if (gtf_tracking_verbose) GMessage(" Found %d transfrags with undetermined strand (%d out of initial %d were fixed by overlaps)\n",
-			    final_unoriented, oriented_by_overlap, initial_unoriented);
+	  if (gtf_tracking_verbose) {
+		        if (oriented_by_overlap>0) GMessage("  Found %d transfrags with undetermined strand (%d out of initial %d were fixed by overlaps)\n",
+			     final_unoriented, oriented_by_overlap, initial_unoriented);
+			else GMessage("  Found %d transfrags with undetermined strand.\n",
+			     final_unoriented);
+	  }
 	}
 	//if (fdis!=NULL) remove(s.chars()); remove 0-length file
 #ifdef HEAPROFILE
