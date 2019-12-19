@@ -25,6 +25,10 @@ extern bool debug;
 
 int cmpByPtr(const pointer p1, const pointer p2);
 
+uint tMaxOverhang(GffObj& a, GffObj& b); //for two overlapping transcripts, return maximum terminal distance
+
+int tMatchScore(int ovlen, GffObj* a, GffObj* b);
+
 bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking);
 //returns true only IF b has fewer exons than a AND a "contains" b
 
@@ -200,7 +204,7 @@ class CEqList: public GList<GffObj> {
     GffObj* head;
     CEqList():GList<GffObj>((GCompareProc*)cmpByPtr, (GFreeProc*)NULL, true) {
       head=NULL;
-      }
+    }
 };
 
 class CTData { //transcript associated data
@@ -336,6 +340,22 @@ public:
 	bool operator==(CTData& b) { return (mrna==b.mrna); }
 };
 
+
+struct CEqMatch {
+	int score; //match score: overlap length - overhangs
+	GffObj* t;
+	CTData* tdata;
+	CEqMatch(GffObj* at=NULL, int sc=0):score(sc), t(at), tdata(NULL) {
+		if (at!=NULL) tdata=(CTData*)(at->uptr);
+	}
+	bool operator<(CEqMatch& o) {
+		return (score<o.score);
+	}
+	bool operator==(CEqMatch& o) {
+	   return (score==o.score);
+	}
+};
+
 class GSuperLocus;
 class GTrackLocus;
 class GXLocus;
@@ -400,9 +420,9 @@ public:
 			for (int i=0;i<mrna->exons.Count();i++) {
 				seg.start=mrna->exons[i]->start;
 				seg.end=mrna->exons[i]->end;
-				int flags=0; //terminal exon flags (1=left end, 2=right end)
-				if (i==0) flags|=1;
-				if (i==mrna->exons.Count()-1) flags|=2;
+				int flags=0; //terminal exon flags: 1=left end, 2=right end
+				if (i==0) flags|=1; //first exon
+				if (i==mrna->exons.Count()-1) flags|=2; //last exon
 				GXSeg xseg(seg.start, seg.end, flags);
 				uexons.Add(xseg);
 				mexons.Add(seg);
@@ -1342,12 +1362,14 @@ void read_transcripts(FILE* f, GList<GSeqData>& seqdata,
 
 void sort_GSeqs_byName(GList<GSeqData>& seqdata);
 
-//moved into gff.h
-//bool singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
+//moved into gff.h:
+//char singleExonTMatch(GffObj& m, GffObj& r, int& ovlen);
 
+/*
 //strict intron chain match, or single-exon match
-bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool fuzzunspl=false,
+bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch=false,
            bool contain_only=false);
+*/
 
 //use qsearch to "position" a given coordinate x within a list of transcripts sorted
 //by their start (lowest) coordinate;

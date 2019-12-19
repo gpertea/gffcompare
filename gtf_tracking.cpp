@@ -31,11 +31,25 @@ bool betterRef(GffObj* a, GffObj* b) {
      }
  }
 
+//for two overlapping transcripts, return maximum terminal distance
+uint tMaxOverhang(GffObj& a, GffObj& b){
+	//WARNING: this does not make sense if a and b do not overlap!
+	uint dstart=(a.start>b.start) ? a.start-b.start : b.start-a.start;
+	uint dend=(a.end>b.end) ? a.end-b.end : b.end-a.end;
+    return ((dstart>dend) ? dstart : dend);
+}
+
+int tMatchScore(int ovlen, GffObj* a, GffObj* b) { //simply ovlen - overhangs
+	//WARNING: this does not make sense if a and b do not overlap!
+	int dstart=(a->start>b->start) ? a->start-b->start : b->start-a->start;
+	int dend=(a->end>b->end) ? a->end-b->end : b->end-a->end;
+    return ((int)ovlen - dstart - dend); //can be negative for large overhangs
+}
+
 GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool matchContain=false) {
  //mrnas MUST be sorted by start coordinate
  //this is optimized for when mrnas list is being populated, in sorted order
  //as it starts scanning from the end of the list
-  int ovlen=0;
   dupidx=-1;
   if (mrnas.Count()==0) return NULL;
   //int nidx=qsearch_mrnas(m->end, mrnas);
@@ -50,14 +64,18 @@ GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool matchContain=
            }
       if (omrna.start>m->end) continue; //this should never be the case if nidx was found with qsearch_mrnas(m->end)
       //locus overlap here:
-      if (tMatch(*m, omrna, ovlen, !matchContain, matchContain)) {
-             dupidx=i;
-             return mrnas[i];
+      //if (tMatch(*m, omrna, ovlen, !matchContain, matchContain)) {
+      int ovlen=0;
+      char matchType=transcriptMatch(*m, omrna, ovlen);
+      if (matchType>0) {
+    	  if (matchType=='=' || !matchContain || omrna.contains(m) ) {
+				 dupidx=i;
+				 return mrnas[i];
+		  }
       }
   }
   return NULL;
 }
-
 
 bool intronChainMatch(GffObj&a, GffObj&b) {
 	if (a.exons.Count()!=b.exons.Count()) return false;
@@ -404,13 +422,13 @@ int parse_mRNAs(GfList& mrnas,
 	return tredundant;
 }
 
-
+/*
 bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool contain_only) {
 	//strict intron chain match, or single-exon match
 	int imax=a.exons.Count()-1;
 	int jmax=b.exons.Count()-1;
 	ovlen=0;
-	if (imax!=jmax) return false; //different number of exons
+	if (imax!=jmax) return false; //different number of exons, cannot match
 	if (imax==0) { //single-exon mRNAs
 		if (contain_only) { //require strict boundary containment (a in b or b in a)
 			//but also that at least 80% of the largest one be covered
@@ -456,7 +474,7 @@ bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool
 	}
 	else return true;
 }
-
+*/
 
 void cluster_mRNAs(GList<GffObj> & mrnas, GList<GLocus> & loci, int qfidx) {
 	//mrnas sorted by start coordinate
@@ -508,7 +526,7 @@ void gatherRefLocOvls(GffObj& m, GLocus& rloc) {
 	for (int i=0;i<rloc.mrnas.Count();i++) {
 		GffObj* r=rloc.mrnas[i];
 		int olen=0;
-		char ovlcode=getOvlCode(m,*r,olen);
+		char ovlcode=getOvlCode(m,*r,olen, strictMatching);
 		if (ovlcode!=0) { //has some sort of overlap with r
 			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
 			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }
