@@ -451,7 +451,8 @@ int main(int argc, char* argv[]) {
     if (di>=0) indir.cut(di+1); //directory path for this input file
           else indir=""; //current directory
 
-    if (debug || (gtf_tracking_verbose && !gtf_tracking_largeScale))
+    //if (debug || (gtf_tracking_verbose && !gtf_tracking_largeScale))
+    if (qryfiles.Count()>1)
         GMessage("Loading query file #%d: %s\n",fi+1, in_file.chars());
     if (in_file=="-") { f_in=stdin; in_file="stdin"; }
       else {
