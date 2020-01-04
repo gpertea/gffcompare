@@ -40,11 +40,12 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -M discard (ignore) single-exon transfrags and reference transcripts\n\
  -N discard (ignore) single-exon reference transcripts\n\
  -D discard \"duplicate\" query transfrags (i.e. those with the same\n\
-    intron chain) within a single sample (disable \"annotation\" mode)\n\
- -S like -D, but stricter duplicate checking: only discard matching query\n\
-    or reference transcripts (same intron chain) if their boundaries are fully\n\
-	contained within other, larger or identical transfrags; if --strict-match\n\
-    is also given, exact matching of all exon boundaries is required\n\
+    intron chain) within a single sample (disable \"annotation\" mode);\n\
+    this option is automatically enabled when multiple query files are provided\n\
+ -S strict duplicate transcript checking: only discard matching (same\n\
+    intron chain) reference (and query transcripts if -D was given) if their\n\
+    boundaries are fully contained within (or same with) mathing transcripts\n\
+    if --strict-match is also given, exact match of all exons is required\n\
  --no-merge : disable close-exon merging (default: merge exons separated by\n\
 	\"introns\" shorter than 5 bases\n\
 \n\
