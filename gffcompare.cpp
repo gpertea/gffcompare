@@ -39,8 +39,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     (Warning: this will discard all \"novel\" loci!)\n\
  -M discard (ignore) single-exon transfrags and reference transcripts\n\
  -N discard (ignore) single-exon reference transcripts\n\
- -D discard \"duplicate\" query transfrags (i.e. those with the same\n\
-    intron chain) within a single sample (disable \"annotation\" mode);\n\
+ -D discard \"duplicate\" query transfrags (i.e. same intron chain) within\n\
+    a single sample (disable \"annotation\" mode for a single file); \n\
     this option is automatically enabled when multiple query files are provided\n\
  -S when -D is enabled (or multiple query files are provided), perform a more \n\
     strict duplicate checking: only discard matching (same intron chain) query \n\
