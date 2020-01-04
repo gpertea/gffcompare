@@ -28,9 +28,9 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
 \n\
  -r reference annotation file (GTF/GFF)\n\
  --strict-match : transcript and exon matching require full exon matching\n\
-    (including terminal exons); code '=' is only assigned if all exons match;\n\
-    code '~' is assigned for a full intron chain match, or, in the case of \n\
-	single-exon transcripts, for a significant overlap\n\
+    (including terminal exons); code '=' is only assigned only if all exons\n\
+    match; code '~' is assigned for a full intron chain match, or, in the \n\
+    case of  single exon transcripts, for a significant overlap\n\
 \n\
  -R for -r option, consider only the reference transcripts that\n\
     overlap any of the input transfrags (Sn correction)\n\
@@ -42,12 +42,13 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -D discard \"duplicate\" query transfrags (i.e. those with the same\n\
     intron chain) within a single sample (disable \"annotation\" mode);\n\
     this option is automatically enabled when multiple query files are provided\n\
- -S strict duplicate transcript checking: only discard matching (same\n\
-    intron chain) reference (and query transcripts if -D was given) if their\n\
-    boundaries are fully contained within (or same with) mathing transcripts\n\
+ -S when -D is enabled (or multiple query files are provided), perform a more \n\
+    strict duplicate checking: only discard matching (same intron chain) query \n\
+    transcripts from the same sample if their boundaries are fully contained \n\
+    within (or same with) matching transcripts\n\
     if --strict-match is also given, exact match of all exons is required\n\
  --no-merge : disable close-exon merging (default: merge exons separated by\n\
-	\"introns\" shorter than 5 bases\n\
+   \"introns\" shorter than 5 bases\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\

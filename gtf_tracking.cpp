@@ -293,7 +293,8 @@ int parse_mRNAs(GfList& mrnas,
 		   if (discardDups) {
 		     //check all gdata->mrnas_r (ref_data) for duplicate ref transcripts
 		     int rpidx=-1;
-		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true);
+		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true); 
+		       //always strict checking of reference duplicates: containment required
 		     if (rp!=NULL) { //duplicate found
 		      //discard one of them
 		      //but let's keep the gene_name if present
