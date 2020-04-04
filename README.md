@@ -1,4 +1,4 @@
-# GffCompare
+## GffCompare
 * compare and evaluate the accuracy of RNA-Seq transcript assemblers (Cufflinks, Stringtie). 
 * collapse (merge) duplicate transcripts from multiple GTF/GFF3 files (e.g. resulted from assembly of different samples)
 * classify transcripts from one or multiple GTF/GFF3 files as they relate to reference transcripts provided in a
@@ -31,7 +31,7 @@ used as a simple way of annotating a set of transcripts.
 
 Another important difference is that the input transcripts are by default no longer discarded when they are found to be "intron redundant", i.e. contained within other, longer isoforms. CuffCompare had the -G option to prevent collapsing of such intron redundant isoforms into their longer "containers", but GffCompare has made this the default mode of operation (hence the -G option is no longer needed and is simply ignored when given). However please note that "matching" transcripts with fully identical intron chains (i.e. with the same exact intron coordinates, hence the same intron-exon structure except the terminal exon ends) are *still* discarded when GTF/GFF files are loaded.
 
-# trmap
+## trmap
 Some pipelines can produce a very large number of potential or partial transcripts ("transfrags"), for example when merging the transcript assemblies from tens or hundreds of RNA-Seq experiments assemblies with `stringtie --merge`. Running GffCompare on such large GTF/GFF files could be slow and memory intensive (because GffCompare always loads the whole transcript data in memory for clustering and other analysis). One may only be interested to know _if_ and _how_ these many transcripts overlap the reference annotation, and further analyze only those which have specific types of overlap with the reference annotation transcripts (or none at all, i.e. if they do not overlap any of it, which may be the case for putative _novel_ transcripts). 
 That's where the `trmap` utility comes in, as this program reports, for each query transcript, all the reference overlaps found, along with their _classification codes_ as described in the GffCompare documentation. The main feature of 'trmap' is that it allows _streaming_ of a very large file of query transcripts (in GFF or BED format) to be checked and classified against a reference annotation file (again, in GFF or BED format).
 
@@ -39,14 +39,14 @@ That's where the `trmap` utility comes in, as this program reports, for each que
 
 The streaming input GFF query input file to be streamed must be _well-formed_ -- i.e. exons MUST be grouped together by transcript ID and immediately follow their parent feature if present. (for BED this is always the case due to the fact that exons are embedded in the same line).
 
-# Building from source
+## Building from source
 Steps for building this package from source (the only dependency is my other code library, [GCLib](../../../gclib)):
 ```
   cd /some/build/dir
-  git clone https://github.com/gpertea/gclib
   git clone https://github.com/gpertea/gffcompare
   cd gffcompare
   make release
 ```
 This should build the **gffcompare** and **trmap** binary executables in the 
 current directory.
+

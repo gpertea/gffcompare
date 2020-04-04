@@ -57,12 +57,10 @@ OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
  ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
 .PHONY : all
-all:    gffcompare trmap
-debug:  gffcompare trmap
-release: gffcompare trmap
-static: gffcompare trmap
-memcheck: gffcompare trmap
-memdebug: gffcompare trmap
+all debug release static memcheck memdebug : ../gclib gffcompare trmap
+
+../gclib:
+	$(shell cd .. && git clone https://github.com/gpertea/gclib.git)
 
 ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
