@@ -1,4 +1,5 @@
-## GffCompare
+## GffCompare      
+[![DOI](https://zenodo.org/badge/48200065.svg)](https://zenodo.org/badge/latestdoi/48200065)
 * compare and evaluate the accuracy of RNA-Seq transcript assemblers (Cufflinks, Stringtie). 
 * collapse (merge) duplicate transcripts from multiple GTF/GFF3 files (e.g. resulted from assembly of different samples)
 * classify transcripts from one or multiple GTF/GFF3 files as they relate to reference transcripts provided in a
@@ -40,13 +41,16 @@ That's where the `trmap` utility comes in, as this program reports, for each que
 The streaming input GFF query input file to be streamed must be _well-formed_ -- i.e. exons MUST be grouped together by transcript ID and immediately follow their parent feature if present. (for BED this is always the case due to the fact that exons are embedded in the same line).
 
 ## Building from source
-Steps for building this package from source (the only dependency is my other code library, [GCLib](../../../gclib)):
+Steps for building this package from github:
 ```
   cd /some/build/dir
   git clone https://github.com/gpertea/gffcompare
   cd gffcompare
   make release
 ```
+If you downloaded the standalone source package `gffread-*.tar.gz` then just unpack that, change to the unpacked directory and run `make release` in that source directory.
+
+
 This should build the **gffcompare** and **trmap** binary executables in the 
 current directory.
 
