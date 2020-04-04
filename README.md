@@ -48,7 +48,7 @@ Steps for building this package from github:
   cd gffcompare
   make release
 ```
-If you downloaded the standalone source package `gffread-*.tar.gz` then just unpack that, change to the unpacked directory and run `make release` in that source directory.
+If you downloaded the standalone source package `gffread-*.tar.gz` then just unpack that, change to the unpacked directory and run `make release` there.
 
 
 This should build the **gffcompare** and **trmap** binary executables in the 
