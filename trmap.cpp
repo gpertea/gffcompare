@@ -1,62 +1,53 @@
-#include <iostream>
-
-#include <fstream>
-#include <sstream>
-
 #include "GArgs.h"
 #include "gff.h"
 #include "GIntervalTree.h"
 
 using std::cout;
 
-#define VERSION "0.11.4"
+#define VERSION "0.11.6"
 
 bool simpleOvl=false;
 bool strictMatching=false;
 bool showCDS=false;
 
 struct GSTree {
-	GIntervalTree it[3]; //0=unstranded, 1: + strand, 2 : - strand
+	GIntervalTree it[3]; //0=unstranded, 1: +strand, 2: -strand
 };
 
+const char* USAGE = "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
+"  trmap [-S] [-o <outfile>] [--strict-match] <ref_gff> <query_gff>\n"
+"Positional arguments:\n"
+"  <ref_gff>    reference annotation file name (GFF/BED format)\n"
+"  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
+"Options:\n"
+"  -o <outfile> write output to <outfile> instead of stdout\n"
+"  -S           report only simple reference overlap percentages, without\n"
+"               classification (one line per query)\n"
+"  --show-cds   add CDS:start:end info to all output transcripts\n"
+"  --strict-match : when intron chains match, the '=' overlap code is assigned\n"
+"               when all exons also match, otherwise assign the '~' code\n";
 
 int main(int argc, char* argv[]) {
-	const std::string usage = std::string("trmap v" VERSION)+
-	" : transcript to reference mapping and overlap classifier.\nUsage:\n"+
-	"  trmap [-S] [-o <outfile>] [--strict-match] <ref_gff> <query_gff>\n"+
-	        "Positional arguments:\n"+
-			"  <ref_gff>    reference annotation file name (GFF/BED format)\n"+
-			"  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"+
-			"Options:\n"+
-			"  -o <outfile> write output to <outfile> instead of stdout\n"+
-			"  -S           report only simple reference overlap percentages, without\n"+
-			"               classification (one line per query)\n"+
-			"  --show-cds   add CDS:start:end info to all output transcripts\n"+
-			"  --strict-match : when intron chains match, the '=' overlap code is assigned\n"+
-			"               when all exons also match, otherwise assign the '~' code\n";
 	GArgs args(argc, argv, "help;strict-match;show-cds;hSo:");
-	args.printError(usage.c_str(), true);
+	args.printError(USAGE, true);
 	if (args.getOpt('h') || args.getOpt("help")) {
-		cout << usage;
+		GMessage(USAGE);
 		exit(EXIT_SUCCESS);
 	}
 	if (args.getOpt('S')) simpleOvl=true;
 	if (args.getOpt("strict-match")) strictMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
-	GHash<GSTree> map_trees;
+
+	GHash<GSTree> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
 
-	if (args.startNonOpt()!=2) {
-		std::cerr << usage << "\nOnly " << args.startNonOpt() << " arguments provided (expected 2)\n";
-		exit(1);
-	}
+	if (args.startNonOpt()!=2)
+		GError("%s\nError: %d arguments provided (expected 2)\n",USAGE, args.startNonOpt());
 	const char* ref_file = args.nextNonOpt();
 	const char* q_file = args.nextNonOpt();
 
 	FILE* fr=fopen(ref_file, "r");
-
-	//always good to check if the file is actually there and can be read
 	if (fr==NULL) GError("Error: could not open reference annotation file (%s)!\n", ref_file);
 
 	GffReader myR(fr, true, true);
@@ -95,15 +86,13 @@ int main(int argc, char* argv[]) {
 	}
 	GffReader myQ(fq, true, true);
 	if (fext && Gstricmp(fext, "bed")==0) myQ.isBED();
-	//myQ.readAll(false, true, true);
-	//for (int i=0; i<myQ.gflst.Count(); i++) {
-	//	GffObj* t=myQ.gflst[i];
 	t=NULL;
 	while ((t=myQ.readNext())!=NULL) {
-		//if (map_trees.count(t->getGSeqName())==0) continue;
 		const char* gseq=t->getGSeqName();
-		if (!map_trees.hasKey(gseq)) continue;
-		if (t->exons.Count()==0) continue; //only work with properly defined transcripts
+		if (!map_trees.hasKey(gseq))
+			continue; //reference sequence not present in annotation, so we can't compare
+		if (t->exons.Count()==0)
+			continue; //only work with properly defined transcripts
 		GVec<int> sidx;
 		int v=0;
 		sidx.Add(v); //always search the '.' strand

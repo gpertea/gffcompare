@@ -1,26 +1,10 @@
 #include "GIntervalTree.h"
-#include <stdio.h>
-#include <math.h>
-#include <iostream>
-
-// If the symbol CHECK_INTERVAL_TREE_ASSUMPTIONS is defined then the
-// code does a lot of extra checking to make sure certain assumptions
-// are satisfied.  This only needs to be done if you suspect bugs are
-// present or if you make significant changes and want to make sure
-// your changes didn't mess anything up.
-// #define CHECK_INTERVAL_TREE_ASSUMPTIONS 1
 
 #ifndef MAX_INT
 #define MAX_INT INT_MAX // some architechturs define INT_MAX not MAX_INT
 #endif
 
-using std::cout;
-using std::endl;
 const int MIN_INT=-MAX_INT;
-
-// define a function to find the maximum of two objects.
-#define ITMax(a, b) ( (a > b) ? a : b )
-
 
 GIntervalTree::GIntervalTree():recursionNodeStackSize(128),
 		 recursionNodeStack(NULL), currentParent(0), recursionNodeStackTop(1),
@@ -30,7 +14,7 @@ GIntervalTree::GIntervalTree():recursionNodeStackSize(128),
   nil->red = 0;
   nil->key = nil->high = nil->maxHigh = MIN_INT;
   nil->storedInterval = NULL;
-  
+
   //root = new IntervalTreeNode;
   root->parent = root->left = root->right = nil;
   root->key = root->high = root->maxHigh = MAX_INT;
@@ -42,7 +26,7 @@ GIntervalTree::GIntervalTree():recursionNodeStackSize(128),
   GMALLOC(recursionNodeStack, recursionNodeStackSize*sizeof(it_recursion_node));
   //recursionNodeStackTop = 1;
   recursionNodeStack[0].start_node = NULL;
-  
+
 }
 
 /***********************************************************************/
@@ -64,7 +48,7 @@ GIntervalTree::GIntervalTree():recursionNodeStackSize(128),
 
 void GIntervalTree::LeftRotate(GIntervalTreeNode* x) {
   GIntervalTreeNode* y;
- 
+
   /*  I originally wrote this function to use the sentinel for */
   /*  nil to avoid checking for nil.  However this introduces a */
   /*  very subtle bug because sometimes this function modifies */
@@ -80,8 +64,8 @@ void GIntervalTree::LeftRotate(GIntervalTreeNode* x) {
 
   if (y->left != nil) y->left->parent=x; /* used to use sentinel here */
   /* and do an unconditional assignment instead of testing for nil */
-  
-  y->parent=x->parent;   
+
+  y->parent=x->parent;
 
   /* instead of checking if x->parent is the root as in the book, we */
   /* count on the root sentinel to implicitly take care of this case */
@@ -93,15 +77,8 @@ void GIntervalTree::LeftRotate(GIntervalTreeNode* x) {
   y->left=x;
   x->parent=y;
 
-  x->maxHigh=ITMax(x->left->maxHigh,ITMax(x->right->maxHigh,x->high));
-  y->maxHigh=ITMax(x->maxHigh,ITMax(y->right->maxHigh,y->high));
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-  CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-  Assert(!nil->red,"nil not red in ITLeftRotate");
-  Assert((nil->maxHigh=MIN_INT),
-	 "nil->maxHigh != MIN_INT in ITLeftRotate");
-#endif
+  x->maxHigh=GMAX(x->left->maxHigh, GMAX(x->right->maxHigh,x->high));
+  y->maxHigh=GMAX(x->maxHigh,GMAX(y->right->maxHigh,y->high));
 }
 
 
@@ -153,15 +130,9 @@ void GIntervalTree::RightRotate(GIntervalTreeNode* y) {
   x->right=y;
   y->parent=x;
 
-  y->maxHigh=ITMax(y->left->maxHigh,ITMax(y->right->maxHigh,y->high));
-  x->maxHigh=ITMax(x->left->maxHigh,ITMax(y->maxHigh,x->high));
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-  CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-  Assert(!nil->red,"nil not red in ITRightRotate");
-  Assert((nil->maxHigh=MIN_INT),
-	 "nil->maxHigh != MIN_INT in ITRightRotate");
-#endif
+  y->maxHigh=GMAX(y->left->maxHigh,GMAX(y->right->maxHigh,y->high));
+  x->maxHigh=GMAX(x->left->maxHigh,GMAX(y->maxHigh,x->high));
+
 }
 
 /***********************************************************************/
@@ -183,13 +154,13 @@ void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
   /*  This function should only be called by InsertITTree (see above) */
   GIntervalTreeNode* x;
   GIntervalTreeNode* y;
-    
+
   z->left=z->right=nil;
   y=root;
   x=root->left;
   while( x != nil) {
     y=x;
-    if ( x->key > z->key) { 
+    if ( x->key > z->key) {
       x=x->left;
     } else { /* x->key <= z->key */
       x=x->right;
@@ -197,7 +168,7 @@ void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
   }
   z->parent=y;
   if ( (y == root) ||
-       (y->key > z->key) ) { 
+       (y->key > z->key) ) {
     y->left=z;
   } else {
     y->right=z;
@@ -227,12 +198,9 @@ void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
 
 void GIntervalTree::FixUpMaxHigh(GIntervalTreeNode * x) {
   while(x != root) {
-    x->maxHigh=ITMax(x->high,ITMax(x->left->maxHigh,x->right->maxHigh));
+    x->maxHigh=GMAX(x->high,GMAX(x->left->maxHigh,x->right->maxHigh));
     x=x->parent;
   }
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-  CheckAssumptions();
-#endif
 }
 
 /*  Before calling InsertNode  the node x should have its key set */
@@ -278,7 +246,7 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
 	x->parent->red=0;
 	x->parent->parent->red=1;
 	RightRotate(x->parent->parent);
-      } 
+      }
     } else { /* case for x->parent == x->parent->parent->right */
              /* this part is just like the section above with */
              /* left and right interchanged */
@@ -296,20 +264,12 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
 	x->parent->red=0;
 	x->parent->parent->red=1;
 	LeftRotate(x->parent->parent);
-      } 
+      }
     }
   }
   root->left->red=0;
   return(newNode);
 
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-  CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-  Assert(!nil->red,"nil not red in ITTreeInsert");
-  Assert(!root->red,"root not red in ITTreeInsert");
-  Assert((nil->maxHigh=MIN_INT),
-	 "nil->maxHigh != MIN_INT in ITTreeInsert");
-#endif
 }
 
 /***********************************************************************/
@@ -324,9 +284,9 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
 /**/
 /*    Note:  uses the algorithm in _Introduction_To_Algorithms_ */
 /***********************************************************************/
-  
+
 GIntervalTreeNode * GIntervalTree::GetSuccessorOf(GIntervalTreeNode * x) const
-{ 
+{
   GIntervalTreeNode* y;
 
   if (nil != (y = x->right)) { /* assignment to y is intentional */
@@ -368,8 +328,8 @@ GIntervalTreeNode * GIntervalTree::GetPredecessorOf(GIntervalTreeNode * x) const
     return(y);
   } else {
     y=x->parent;
-    while(x == y->left) { 
-      if (y == root) return(nil); 
+    while(x == y->left) {
+      if (y == root) return(nil);
       x=y;
       y=y->parent;
     }
@@ -406,7 +366,7 @@ void GIntervalTreeNode::Print(GIntervalTreeNode * nil,
 }
 
 void GIntervalTree::TreePrintHelper( GIntervalTreeNode* x) const {
-  
+
   if (x != nil) {
     TreePrintHelper(x->left);
     x->Print(nil,root);
@@ -492,7 +452,7 @@ void GIntervalTree::DeleteFixUp(GIntervalTreeNode* x) {
 	LeftRotate(x->parent);
 	w=x->parent->right;
       }
-      if ( (!w->right->red) && (!w->left->red) ) { 
+      if ( (!w->right->red) && (!w->left->red) ) {
 	w->red=1;
 	x=x->parent;
       } else {
@@ -516,7 +476,7 @@ void GIntervalTree::DeleteFixUp(GIntervalTreeNode* x) {
 	RightRotate(x->parent);
 	w=x->parent->left;
       }
-      if ( (!w->right->red) && (!w->left->red) ) { 
+      if ( (!w->right->red) && (!w->left->red) ) {
 	w->red=1;
 	x=x->parent;
       } else {
@@ -584,23 +544,23 @@ GSeg* GIntervalTree::DeleteNode(GIntervalTreeNode * z){
     Assert( (y!=nil),"y is nil in DeleteNode \n");
 #endif
     /* y is the node to splice out and x is its child */
-  
+
     y->maxHigh = MIN_INT;
     y->left=z->left;
     y->right=z->right;
     y->parent=z->parent;
     z->left->parent=z->right->parent=y;
     if (z == z->parent->left) {
-      z->parent->left=y; 
+      z->parent->left=y;
     } else {
       z->parent->right=y;
     }
-    FixUpMaxHigh(x->parent); 
+    FixUpMaxHigh(x->parent);
     if (!(y->red)) {
       y->red = z->red;
       DeleteFixUp(x);
     } else
-      y->red = z->red; 
+      y->red = z->red;
     delete z;
 #ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
     CheckAssumptions();
@@ -687,7 +647,7 @@ TemplateStack<GSeg*> * GIntervalTree::Enumerate(int low,
   TemplateStack<GSeg*> * enumResultStack;
   GIntervalTreeNode* x=root->left;
   int stuffToDo = (x != nil);
-  
+
   // Possible speed up: add min field to prune right searches //
 
 #ifdef DEBUG_ASSERT
@@ -702,13 +662,13 @@ TemplateStack<GSeg*> * GIntervalTree::Enumerate(int low,
       enumResultStack->Push(x->storedInterval);
       recursionNodeStack[currentParent].tryRightBranch=1;
     }
-    if(x->left->maxHigh >= low) { // implies x != nil 
+    if(x->left->maxHigh >= low) { // implies x != nil
       if ( recursionNodeStackTop == recursionNodeStackSize ) {
 	recursionNodeStackSize *= 2;
-	recursionNodeStack = (it_recursion_node *) 
+	recursionNodeStack = (it_recursion_node *)
 	  realloc(recursionNodeStack,
 		  recursionNodeStackSize * sizeof(it_recursion_node));
-	if (recursionNodeStack == NULL) 
+	if (recursionNodeStack == NULL)
 	  ExitProgramMacro("realloc failed in IntervalTree::Enumerate\n");
       }
       recursionNodeStack[recursionNodeStackTop].start_node = x;
@@ -733,12 +693,12 @@ TemplateStack<GSeg*> * GIntervalTree::Enumerate(int low,
   Assert((recursionNodeStackTop == 1),
 	 "recursionStack not empty when exiting IntervalTree::Enumerate");
 #endif
-  return(enumResultStack);   
+  return(enumResultStack);
 }
-	
 
 
-int GIntervalTree::CheckMaxHighFieldsHelper(GIntervalTreeNode * y, 
+
+int GIntervalTree::CheckMaxHighFieldsHelper(GIntervalTreeNode * y,
 				    const int currentHigh,
 				    int match) const
 {
@@ -754,7 +714,7 @@ int GIntervalTree::CheckMaxHighFieldsHelper(GIntervalTreeNode * y,
   return match;
 }
 
-	  
+
 
 /* Make sure the maxHigh fields for everything makes sense. *
  * If something is wrong, print a warning and exit */
@@ -762,23 +722,8 @@ void GIntervalTree::CheckMaxHighFields(GIntervalTreeNode * x) const {
   if (x != nil) {
     CheckMaxHighFields(x->left);
     if(!(CheckMaxHighFieldsHelper(x,x->maxHigh,0) > 0)) {
-      ExitProgramMacro("error found in CheckMaxHighFields.\n");
+      ExitProgramMacro("Error found in CheckMaxHighFields.\n");
     }
     CheckMaxHighFields(x->right);
   }
 }
-
-void GIntervalTree::CheckAssumptions() const {
- VERIFY(nil->key == MIN_INT);
- VERIFY(nil->high == MIN_INT);
- VERIFY(nil->maxHigh == MIN_INT);
- VERIFY(root->key == MAX_INT);
- VERIFY(root->high == MAX_INT);
- VERIFY(root->maxHigh == MAX_INT);
- VERIFY(nil->storedInterval == NULL);
- VERIFY(root->storedInterval == NULL);
- VERIFY(nil->red == 0);
- VERIFY(root->red == 0);
- CheckMaxHighFields(root->left);
-}
- 
