@@ -1,11 +1,12 @@
 #ifndef E_INTERVAL_TREE
 #define E_INTERVAL_TREE
 
-#include "TStack.hh"
+//#include "TStack.hh"
 #include "GBase.h"
-#include <math.h>
-#include <limits.h>
-#include <iostream>
+#include "GVec.hh"
+//#include <math.h>
+//#include <limits.h>
+//#include <iostream>
 
 // This is an interval tree implementation based on red-black-trees
 // as described in the book _Introduction_To_Algorithms_ by Cormen, Leisserson, and Rivest.
@@ -36,7 +37,7 @@ public:
   ~GIntervalTreeNode() {}
 };
 
-struct it_recursion_node {
+struct G_ITRecursionNode {
 public:
   // this structure stores the information needed when we take the
   // right branch in searching for intervals but possibly come back
@@ -49,7 +50,7 @@ public:
 class GIntervalTree {
 private:
   unsigned int recursionNodeStackSize;
-  it_recursion_node * recursionNodeStack;
+  G_ITRecursionNode * recursionNodeStack;
   unsigned int currentParent;
   unsigned int recursionNodeStackTop;
 protected:
@@ -78,7 +79,7 @@ public:
   GIntervalTreeNode * Insert(GSeg*);
   GIntervalTreeNode * GetPredecessorOf(GIntervalTreeNode*) const;
   GIntervalTreeNode * GetSuccessorOf(GIntervalTreeNode*) const;
-  TemplateStack<GSeg *> * Enumerate(int low, int high) ;
+  GVec<GSeg*> * Enumerate(int low, int high) ;
 };
 
 

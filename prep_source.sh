@@ -11,7 +11,7 @@ mkdir $pack
 mkdir $pack/gclib
 libdir=$pack/gclib/
 cp LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} \
- GIntervalTree.{h,cpp} TStack.hh trmap.cpp $pack/
+ GIntervalTree.{h,cpp} trmap.cpp $pack/
 sed 's|\.\./gclib|./gclib|' Makefile > $pack/Makefile
 cp ../gclib/{GVec,GList,GHash}.hh $libdir
 cp ../gclib/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $libdir

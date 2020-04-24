@@ -23,52 +23,43 @@ GIntervalTree::GIntervalTree():recursionNodeStackSize(128),
 
   /* the following are used for the Enumerate function */
   //recursionNodeStackSize = 128;
-  GMALLOC(recursionNodeStack, recursionNodeStackSize*sizeof(it_recursion_node));
+  GMALLOC(recursionNodeStack, recursionNodeStackSize*sizeof(G_ITRecursionNode));
   //recursionNodeStackTop = 1;
   recursionNodeStack[0].start_node = NULL;
 
 }
 
-/***********************************************************************/
-/*  FUNCTION:  LeftRotate */
-/**/
-/*  INPUTS:  the node to rotate on */
-/**/
-/*  OUTPUT:  None */
-/**/
-/*  Modifies Input: this, x */
-/**/
-/*  EFFECTS:  Rotates as described in _Introduction_To_Algorithms by */
-/*            Cormen, Leiserson, Rivest (Chapter 14).  Basically this */
-/*            makes the parent of x be to the left of x, x the parent of */
-/*            its parent before the rotation and fixes other pointers */
-/*            accordingly. Also updates the maxHigh fields of x and y */
-/*            after rotation. */
-/***********************************************************************/
-
+// LeftRotate
+//  INPUT:  the node to rotate on
+//  Rotates as described in _Introduction_To_Algorithms by
+//  Cormen, Leiserson, Rivest (Chapter 14).  Basically this
+//  makes the parent of x be to the left of x, x the parent of
+//  its parent before the rotation and fixes other pointers
+//  accordingly. Also updates the maxHigh fields of x and y
+//  after rotation.
 void GIntervalTree::LeftRotate(GIntervalTreeNode* x) {
   GIntervalTreeNode* y;
 
-  /*  I originally wrote this function to use the sentinel for */
-  /*  nil to avoid checking for nil.  However this introduces a */
-  /*  very subtle bug because sometimes this function modifies */
-  /*  the parent pointer of nil.  This can be a problem if a */
-  /*  function which calls LeftRotate also uses the nil sentinel */
-  /*  and expects the nil sentinel's parent pointer to be unchanged */
-  /*  after calling this function.  For example, when DeleteFixUP */
-  /*  calls LeftRotate it expects the parent pointer of nil to be */
-  /*  unchanged. */
+  //  originally wrote this function to use the sentinel for
+  //  nil to avoid checking for nil.  However this introduces a
+  //  very subtle bug because sometimes this function modifies
+  //  the parent pointer of nil.  This can be a problem if a
+  //  function which calls LeftRotate also uses the nil sentinel
+  //  and expects the nil sentinel's parent pointer to be unchanged
+  //  after calling this function.  For example, when DeleteFixUP
+  //  calls LeftRotate it expects the parent pointer of nil to be
+  //  unchanged.
 
   y=x->right;
   x->right=y->left;
 
-  if (y->left != nil) y->left->parent=x; /* used to use sentinel here */
-  /* and do an unconditional assignment instead of testing for nil */
+  if (y->left != nil) y->left->parent=x; // used to use sentinel here
+  // and do an unconditional assignment instead of testing for nil
 
   y->parent=x->parent;
 
-  /* instead of checking if x->parent is the root as in the book, we */
-  /* count on the root sentinel to implicitly take care of this case */
+  // instead of checking if x->parent is the root as in the book, we
+  // count on the root sentinel to implicitly take care of this case
   if( x == x->parent->left) {
     x->parent->left=y;
   } else {
@@ -82,45 +73,25 @@ void GIntervalTree::LeftRotate(GIntervalTreeNode* x) {
 }
 
 
-/***********************************************************************/
-/*  FUNCTION:  RighttRotate */
-/**/
-/*  INPUTS:  node to rotate on */
-/**/
-/*  OUTPUT:  None */
-/**/
-/*  Modifies Input?: this, y */
-/**/
-/*  EFFECTS:  Rotates as described in _Introduction_To_Algorithms by */
-/*            Cormen, Leiserson, Rivest (Chapter 14).  Basically this */
-/*            makes the parent of x be to the left of x, x the parent of */
-/*            its parent before the rotation and fixes other pointers */
-/*            accordingly. Also updates the maxHigh fields of x and y */
-/*            after rotation. */
-/***********************************************************************/
-
-
+//  FUNCTION:  RighttRotate
+//  INPUTS:  node to rotate on
+//  EFFECTS:  Rotates as described in _Introduction_To_Algorithms by
+//    Cormen, Leiserson, Rivest (Chapter 14).  Basically this
+//    makes the parent of x be to the left of x, x the parent of
+//    its parent before the rotation and fixes other pointers
+//    accordingly. Also updates the maxHigh fields of x and y
+//    after rotation.
 void GIntervalTree::RightRotate(GIntervalTreeNode* y) {
   GIntervalTreeNode* x;
-
-  /*  I originally wrote this function to use the sentinel for */
-  /*  nil to avoid checking for nil.  However this introduces a */
-  /*  very subtle bug because sometimes this function modifies */
-  /*  the parent pointer of nil.  This can be a problem if a */
-  /*  function which calls LeftRotate also uses the nil sentinel */
-  /*  and expects the nil sentinel's parent pointer to be unchanged */
-  /*  after calling this function.  For example, when DeleteFixUP */
-  /*  calls LeftRotate it expects the parent pointer of nil to be */
-  /*  unchanged. */
 
   x=y->left;
   y->left=x->right;
 
-  if (nil != x->right)  x->right->parent=y; /*used to use sentinel here */
-  /* and do an unconditional assignment instead of testing for nil */
+  if (nil != x->right)  x->right->parent=y; //used to use sentinel here
+  // and do an unconditional assignment instead of testing for nil
 
-  /* instead of checking if x->parent is the root as in the book, we */
-  /* count on the root sentinel to implicitly take care of this case */
+  // instead of checking if x->parent is the root as in the book, we
+  // count on the root sentinel to implicitly take care of this case
   x->parent=y->parent;
   if( y == y->parent->left) {
     y->parent->left=x;
@@ -135,23 +106,14 @@ void GIntervalTree::RightRotate(GIntervalTreeNode* y) {
 
 }
 
-/***********************************************************************/
-/*  FUNCTION:  TreeInsertHelp  */
-/**/
-/*  INPUTS:  z is the node to insert */
-/**/
-/*  OUTPUT:  none */
-/**/
-/*  Modifies Input:  this, z */
-/**/
-/*  EFFECTS:  Inserts z into the tree as if it were a regular binary tree */
-/*            using the algorithm described in _Introduction_To_Algorithms_ */
-/*            by Cormen et al.  This function is only intended to be called */
-/*            by the InsertTree function and not by the user */
-/***********************************************************************/
-
+//  FUNCTION:  TreeInsertHelp
+//  INPUTS:  z is the node to insert
+//  EFFECTS:  Inserts z into the tree as if it were a regular binary tree
+//       using the algorithm described in _Introduction_To_Algorithms_
+//       by Cormen et al.  This function is only intended to be called
+//       by the InsertTree function and not by the user
 void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
-  /*  This function should only be called by InsertITTree (see above) */
+  //  this should only be called by the Insert method
   GIntervalTreeNode* x;
   GIntervalTreeNode* y;
 
@@ -162,7 +124,7 @@ void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
     y=x;
     if ( x->key > z->key) {
       x=x->left;
-    } else { /* x->key <= z->key */
+    } else { // x->key <= z->key
       x=x->right;
     }
   }
@@ -183,44 +145,27 @@ void GIntervalTree::TreeInsertHelp(GIntervalTreeNode* z) {
 }
 
 
-/***********************************************************************/
-/*  FUNCTION:  FixUpMaxHigh  */
-/**/
-/*  INPUTS:  x is the node to start from*/
-/**/
-/*  OUTPUT:  none */
-/**/
-/*  Modifies Input:  this */
-/**/
-/*  EFFECTS:  Travels up to the root fixing the maxHigh fields after */
-/*            an insertion or deletion */
-/***********************************************************************/
-
-void GIntervalTree::FixUpMaxHigh(GIntervalTreeNode * x) {
+//  FUNCTION:  FixUpMaxHigh
+//  INPUTS:  x is the node to start from
+//  EFFECTS:  Travels up to the root fixing the maxHigh fields after
+//            an insertion or deletion
+void GIntervalTree::FixUpMaxHigh(GIntervalTreeNode* x) {
   while(x != root) {
     x->maxHigh=GMAX(x->high,GMAX(x->left->maxHigh,x->right->maxHigh));
     x=x->parent;
   }
 }
 
-/*  Before calling InsertNode  the node x should have its key set */
-
-/***********************************************************************/
-/*  FUNCTION:  InsertNode */
-/**/
-/*  INPUTS:  newInterval is the interval to insert*/
-/**/
-/*  OUTPUT:  This function returns a pointer to the newly inserted node */
-/*           which is guaranteed to be valid until this node is deleted. */
-/*           What this means is if another data structure stores this */
-/*           pointer then the tree does not need to be searched when this */
-/*           is to be deleted. */
-/**/
-/*  Modifies Input: tree */
-/**/
-/*  EFFECTS:  Creates a node node which contains the appropriate key and */
-/*            info pointers and inserts it into the tree. */
-/***********************************************************************/
+//  Before calling InsertNode  the node x should have its key set
+//  FUNCTION:  InsertNode
+//  INPUT:  newInterval is the interval to insert
+//  OUTPUT:  This function returns a pointer to the newly inserted node
+//           which is guaranteed to be valid until this node is deleted.
+//           What this means is if another data structure stores this
+//           pointer then the tree does not need to be searched when this
+//           is to be deleted.
+//  EFFECTS:  Creates a node node which contains the appropriate key and
+//           info pointers and inserts it into the tree.
 
 GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
   GIntervalTreeNode* y;
@@ -230,7 +175,7 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
   FixUpMaxHigh(x->parent);
   newNode = x;
   x->red=1;
-  while(x->parent->red) { /* use sentinel instead of checking for root */
+  while(x->parent->red) { // use sentinel instead of checking for root
     if (x->parent == x->parent->parent->left) {
       y=x->parent->parent->right;
       if (y->red) {
@@ -247,9 +192,9 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
 	x->parent->parent->red=1;
 	RightRotate(x->parent->parent);
       }
-    } else { /* case for x->parent == x->parent->parent->right */
-             /* this part is just like the section above with */
-             /* left and right interchanged */
+    } else { // case for x->parent == x->parent->parent->right
+             // this part is just like the section above with
+             // left and right interchanged
       y=x->parent->parent->left;
       if (y->red) {
 	x->parent->red=0;
@@ -272,31 +217,22 @@ GIntervalTreeNode * GIntervalTree::Insert(GSeg * newInterval) {
 
 }
 
-/***********************************************************************/
-/*  FUNCTION:  GetSuccessorOf  */
-/**/
-/*    INPUTS:  x is the node we want the successor of */
-/**/
-/*    OUTPUT:  This function returns the successor of x or NULL if no */
-/*             successor exists. */
-/**/
-/*    Modifies Input: none */
-/**/
-/*    Note:  uses the algorithm in _Introduction_To_Algorithms_ */
-/***********************************************************************/
-
+//  FUNCTION:  GetSuccessorOf
+//  INPUTS:  x is the node we want the successor of
+//  OUTPUT:  This function returns the successor of x or NULL if no
+//             successor exists.
 GIntervalTreeNode * GIntervalTree::GetSuccessorOf(GIntervalTreeNode * x) const
 {
   GIntervalTreeNode* y;
 
-  if (nil != (y = x->right)) { /* assignment to y is intentional */
-    while(y->left != nil) { /* returns the minium of the right subtree of x */
+  if (nil != (y = x->right)) { // assignment to y is intentional
+    while(y->left != nil) { // returns the minium of the right subtree of x
       y=y->left;
     }
     return(y);
   } else {
     y=x->parent;
-    while(x == y->right) { /* sentinel used instead of checking for nil */
+    while(x == y->right) { // sentinel used instead of checking for nil
       x=y;
       y=y->parent;
     }
@@ -305,24 +241,16 @@ GIntervalTreeNode * GIntervalTree::GetSuccessorOf(GIntervalTreeNode * x) const
   }
 }
 
-/***********************************************************************/
-/*  FUNCTION:  GetPredecessorOf  */
-/**/
-/*    INPUTS:  x is the node to get predecessor of */
-/**/
-/*    OUTPUT:  This function returns the predecessor of x or NULL if no */
-/*             predecessor exists. */
-/**/
-/*    Modifies Input: none */
-/**/
-/*    Note:  uses the algorithm in _Introduction_To_Algorithms_ */
-/***********************************************************************/
+//  FUNCTION:  GetPredecessorOf
+//    INPUTS:  x is the node to get predecessor of
+//    OUTPUT:  This function returns the predecessor of x or NULL if no
+//             predecessor exists.
 
 GIntervalTreeNode * GIntervalTree::GetPredecessorOf(GIntervalTreeNode * x) const {
   GIntervalTreeNode* y;
 
-  if (nil != (y = x->left)) { /* assignment to y is intentional */
-    while(y->right != nil) { /* returns the maximum of the left subtree of x */
+  if (nil != (y = x->left)) { // assignment to y is intentional
+    while(y->right != nil) { // returns the maximum of the left subtree of x
       y=y->right;
     }
     return(y);
@@ -337,21 +265,7 @@ GIntervalTreeNode * GIntervalTree::GetPredecessorOf(GIntervalTreeNode * x) const
   }
 }
 
-/***********************************************************************/
-/*  FUNCTION:  Print */
-/**/
-/*    INPUTS:  none */
-/**/
-/*    OUTPUT:  none  */
-/**/
-/*    EFFECTS:  This function recursively prints the nodes of the tree */
-/*              inorder. */
-/**/
-/*    Modifies Input: none */
-/**/
-/*    Note:    This function should only be called from ITTreePrint */
-/***********************************************************************/
-
+// This function recursively prints the nodes of the tree inorder
 void GIntervalTreeNode::Print(GIntervalTreeNode * nil,
 			     GIntervalTreeNode * root) const {
   //storedInterval->Print(); //print the interval here
@@ -366,7 +280,6 @@ void GIntervalTreeNode::Print(GIntervalTreeNode * nil,
 }
 
 void GIntervalTree::TreePrintHelper( GIntervalTreeNode* x) const {
-
   if (x != nil) {
     TreePrintHelper(x->left);
     x->Print(nil,root);
@@ -375,70 +288,46 @@ void GIntervalTree::TreePrintHelper( GIntervalTreeNode* x) const {
 }
 
 GIntervalTree::~GIntervalTree() {
-  GIntervalTreeNode * x = root->left;
-  TemplateStack<GIntervalTreeNode *> stuffToFree;
+	GIntervalTreeNode * x = root->left;
+	GVec<GIntervalTreeNode *> stuffToFree;
 
-  if (x != nil) {
-    if (x->left != nil) {
-      stuffToFree.Push(x->left);
-    }
-    if (x->right != nil) {
-      stuffToFree.Push(x->right);
-    }
-    // delete x->storedInterval;
-    delete x;
-    while( stuffToFree.NotEmpty() ) {
-      x = stuffToFree.Pop();
-      if (x->left != nil) {
-	stuffToFree.Push(x->left);
-      }
-      if (x->right != nil) {
-	stuffToFree.Push(x->right);
-      }
-      // delete x->storedInterval;
-      delete x;
-    }
-  }
-  delete nil;
-  delete root;
-  free(recursionNodeStack);
+	if (x != nil) {
+		if (x->left != nil) {
+			stuffToFree.Push(x->left);
+		}
+		if (x->right != nil) {
+			stuffToFree.Push(x->right);
+		}
+		// delete x->storedInterval;
+		delete x;
+		while( stuffToFree.Count()>0 ) {
+			x = stuffToFree.Pop();
+			if (x->left != nil) {
+				stuffToFree.Push(x->left);
+			}
+			if (x->right != nil) {
+				stuffToFree.Push(x->right);
+			}
+			// delete x->storedInterval;
+			delete x;
+		}
+	}
+	delete nil;
+	delete root;
+	GFREE(recursionNodeStack);
 }
 
 
-/***********************************************************************/
-/*  FUNCTION:  Print */
-/**/
-/*    INPUTS:  none */
-/**/
-/*    OUTPUT:  none */
-/**/
-/*    EFFECT:  This function recursively prints the nodes of the tree */
-/*             inorder. */
-/**/
-/*    Modifies Input: none */
-/**/
-/***********************************************************************/
-
+//This function recursively prints the nodes of the tree
 void GIntervalTree::Print() const {
   TreePrintHelper(root->left);
 }
 
-/***********************************************************************/
-/*  FUNCTION:  DeleteFixUp */
-/**/
-/*    INPUTS:  x is the child of the spliced */
-/*             out node in DeleteNode. */
-/**/
-/*    OUTPUT:  none */
-/**/
-/*    EFFECT:  Performs rotations and changes colors to restore red-black */
-/*             properties after a node is deleted */
-/**/
-/*    Modifies Input: this, x */
-/**/
-/*    The algorithm from this function is from _Introduction_To_Algorithms_ */
-/***********************************************************************/
-
+//  FUNCTION:  DeleteFixUp
+//    INPUTS:  x is the child of the spliced
+//            out node in DeleteNode.
+//    EFFECT:  Performs rotations and changes colors to restore red-black
+//             properties after a node is deleted
 void GIntervalTree::DeleteFixUp(GIntervalTreeNode* x) {
   GIntervalTreeNode * w;
   GIntervalTreeNode * rootLeft = root->left;
@@ -466,9 +355,9 @@ void GIntervalTree::DeleteFixUp(GIntervalTreeNode* x) {
 	x->parent->red=0;
 	w->right->red=0;
 	LeftRotate(x->parent);
-	x=rootLeft; /* this is to exit while loop */
+	x=rootLeft; // this is to exit while loop
       }
-    } else { /* the code below is has left and right switched from above */
+    } else { // the code below is has left and right switched from above
       w=x->parent->left;
       if (w->red) {
 	w->red=0;
@@ -490,38 +379,22 @@ void GIntervalTree::DeleteFixUp(GIntervalTreeNode* x) {
 	x->parent->red=0;
 	w->left->red=0;
 	RightRotate(x->parent);
-	x=rootLeft; /* this is to exit while loop */
+	x=rootLeft; // this is to exit while loop
       }
     }
   }
   x->red=0;
 
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-  CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-  Assert(!nil->red,"nil not black in ITDeleteFixUp");
-  Assert((nil->maxHigh=MIN_INT),
-	 "nil->maxHigh != MIN_INT in ITDeleteFixUp");
-#endif
 }
 
 
-/***********************************************************************/
-/*  FUNCTION:  DeleteNode */
-/**/
-/*    INPUTS:  tree is the tree to delete node z from */
-/**/
-/*    OUTPUT:  returns the Interval stored at deleted node */
-/**/
-/*    EFFECT:  Deletes z from tree and but don't call destructor */
-/*             Then calls FixUpMaxHigh to fix maxHigh fields then calls */
-/*             ITDeleteFixUp to restore red-black properties */
-/**/
-/*    Modifies Input:  z */
-/**/
-/*    The algorithm from this function is from _Introduction_To_Algorithms_ */
-/***********************************************************************/
-
+//  FUNCTION:  DeleteNode */
+//
+//    INPUTS:  tree is the tree to delete node z from
+//    OUTPUT:  returns the Interval stored at deleted node
+//    EFFECT:  Deletes z from tree and but don't call destructor
+//             Then calls FixUpMaxHigh to fix maxHigh fields then calls
+//             DeleteFixUp to restore red-black properties
 GSeg* GIntervalTree::DeleteNode(GIntervalTreeNode * z){
   GIntervalTreeNode* y;
   GIntervalTreeNode* x;
@@ -529,7 +402,7 @@ GSeg* GIntervalTree::DeleteNode(GIntervalTreeNode * z){
 
   y= ((z->left == nil) || (z->right == nil)) ? z : GetSuccessorOf(z);
   x= (y->left == nil) ? y->right : y->left;
-  if (root == (x->parent = y->parent)) { /* assignment of y->p to x->p is intentional */
+  if (root == (x->parent = y->parent)) { // assignment of y->p to x->p is intentional
     root->left=x;
   } else {
     if (y == y->parent->left) {
@@ -538,12 +411,12 @@ GSeg* GIntervalTree::DeleteNode(GIntervalTreeNode * z){
       y->parent->right=x;
     }
   }
-  if (y != z) { /* y should not be nil in this case */
+  if (y != z) { // y should not be nil in this case
 
 #ifdef DEBUG_ASSERT
     Assert( (y!=nil),"y is nil in DeleteNode \n");
 #endif
-    /* y is the node to splice out and x is its child */
+    // y is the node to splice out and x is its child
 
     y->maxHigh = MIN_INT;
     y->left=z->left;
@@ -562,40 +435,19 @@ GSeg* GIntervalTree::DeleteNode(GIntervalTreeNode * z){
     } else
       y->red = z->red;
     delete z;
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-    CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-    Assert(!nil->red,"nil not black in ITDelete");
-    Assert((nil->maxHigh=MIN_INT),"nil->maxHigh != MIN_INT in ITDelete");
-#endif
   } else {
     FixUpMaxHigh(x->parent);
     if (!(y->red)) DeleteFixUp(x);
     delete y;
-#ifdef CHECK_INTERVAL_TREE_ASSUMPTIONS
-    CheckAssumptions();
-#elif defined(DEBUG_ASSERT)
-    Assert(!nil->red,"nil not black in ITDelete");
-    Assert((nil->maxHigh=MIN_INT),"nil->maxHigh != MIN_INT in ITDelete");
-#endif
   }
   return returnValue;
 }
 
 
-/***********************************************************************/
-/*  FUNCTION:  Overlap */
-/**/
-/*    INPUTS:  [a1,a2] and [b1,b2] are the low and high endpoints of two */
-/*             closed intervals.  */
-/**/
-/*    OUTPUT:  stack containing pointers to the nodes between [low,high] */
-/**/
-/*    Modifies Input: none */
-/**/
-/*    EFFECT:  returns 1 if the intervals overlap, and 0 otherwise */
-/***********************************************************************/
-
+//  FUNCTION:  Overlap
+//  [a1,a2] and [b1,b2] are the low and high endpoints of two
+//  closed intervals.
+//  returns 1 if the intervals overlap, and 0 otherwise
 int Overlap(int a1, int a2, int b1, int b2) {
   if (a1 <= b1) {
     return( (b1 <= a2) );
@@ -604,125 +456,110 @@ int Overlap(int a1, int a2, int b1, int b2) {
   }
 }
 
+//  FUNCTION:  Enumerate
+//    INPUTS:  tree is the tree to look for intervals overlapping the
+//             closed interval [low,high]
+//    OUTPUT:  stack containing pointers to the nodes overlapping
+//             [low,high]
+//    EFFECT:  Returns a stack containing pointers to nodes containing
+//             intervals which overlap [low,high] in O(max(N,k*log(N)))
+//             where N is the number of intervals in the tree and k is
+//             the number of overlapping intervals
 
-/***********************************************************************/
-/*  FUNCTION:  Enumerate */
-/**/
-/*    INPUTS:  tree is the tree to look for intervals overlapping the */
-/*             closed interval [low,high]  */
-/**/
-/*    OUTPUT:  stack containing pointers to the nodes overlapping */
-/*             [low,high] */
-/**/
-/*    Modifies Input: none */
-/**/
-/*    EFFECT:  Returns a stack containing pointers to nodes containing */
-/*             intervals which overlap [low,high] in O(max(N,k*log(N))) */
-/*             where N is the number of intervals in the tree and k is  */
-/*             the number of overlapping intervals                      */
-/**/
-/*    Note:    This basic idea for this function comes from the  */
-/*              _Introduction_To_Algorithms_ book by Cormen et al, but */
-/*             modifications were made to return all overlapping intervals */
-/*             instead of just the first overlapping interval as in the */
-/*             book.  The natural way to do this would require recursive */
-/*             calls of a basic search function.  I translated the */
-/*             recursive version into an iterative version with a stack */
-/*             as described below. */
-/***********************************************************************/
+//    Note:    This basic idea for this function comes from the
+//              _Introduction_To_Algorithms_ book by Cormen et al, but
+//             modifications were made to return all overlapping intervals
+//             instead of just the first overlapping interval as in the
+//             book.  The natural way to do this would require recursive
+//             calls of a basic search function.  I translated the
+//             recursive version into an iterative version with a stack
+//            as described below.
 
+//  The basic idea for the function below is to take the IntervalSearch
+//  function from the book and modify to find all overlapping intervals
+//  instead of just one.  This means that any time we take the left
+//  branch down the tree we must also check the right branch if and only if
+//  we find an overlapping interval in that left branch.  Note this is a
+//  recursive condition because if we go left at the root then go left
+//  again at the first left child and find an overlap in the left subtree
+//  of the left child of root we must recursively check the right subtree
+//  of the left child of root as well as the right child of root.
 
-/*  The basic idea for the function below is to take the IntervalSearch */
-/*  function from the book and modify to find all overlapping intervals */
-/*  instead of just one.  This means that any time we take the left */
-/*  branch down the tree we must also check the right branch if and only if */
-/*  we find an overlapping interval in that left branch.  Note this is a */
-/*  recursive condition because if we go left at the root then go left */
-/*  again at the first left child and find an overlap in the left subtree */
-/*  of the left child of root we must recursively check the right subtree */
-/*  of the left child of root as well as the right child of root. */
+GVec<GSeg*> * GIntervalTree::Enumerate(int low,
+		int high)  {
+	GVec<GSeg*> * enumResultStack;
+	GIntervalTreeNode* x=root->left;
+	int stuffToDo = (x != nil);
 
-TemplateStack<GSeg*> * GIntervalTree::Enumerate(int low,
-							int high)  {
-  TemplateStack<GSeg*> * enumResultStack;
-  GIntervalTreeNode* x=root->left;
-  int stuffToDo = (x != nil);
-
-  // Possible speed up: add min field to prune right searches //
+	// Possible speed up: add min field to prune right searches
 
 #ifdef DEBUG_ASSERT
-  Assert((recursionNodeStackTop == 1),
-	 "recursionStack not empty when entering IntervalTree::Enumerate");
+	Assert((recursionNodeStackTop == 1),
+			"recursionStack not empty when entering IntervalTree::Enumerate");
 #endif
-  currentParent = 0;
-  enumResultStack = new TemplateStack<GSeg*>(4);
+	currentParent = 0;
+	enumResultStack = new GVec<GSeg*>(4);
 
-  while(stuffToDo) {
-    if (Overlap(low,high,x->key,x->high) ) {
-      enumResultStack->Push(x->storedInterval);
-      recursionNodeStack[currentParent].tryRightBranch=1;
-    }
-    if(x->left->maxHigh >= low) { // implies x != nil
-      if ( recursionNodeStackTop == recursionNodeStackSize ) {
-	recursionNodeStackSize *= 2;
-	recursionNodeStack = (it_recursion_node *)
-	  realloc(recursionNodeStack,
-		  recursionNodeStackSize * sizeof(it_recursion_node));
-	if (recursionNodeStack == NULL)
-	  ExitProgramMacro("realloc failed in IntervalTree::Enumerate\n");
-      }
-      recursionNodeStack[recursionNodeStackTop].start_node = x;
-      recursionNodeStack[recursionNodeStackTop].tryRightBranch = 0;
-      recursionNodeStack[recursionNodeStackTop].parentIndex = currentParent;
-      currentParent = recursionNodeStackTop++;
-      x = x->left;
-    } else {
-      x = x->right;
-    }
-    stuffToDo = (x != nil);
-    while( (!stuffToDo) && (recursionNodeStackTop > 1) ) {
-	if(recursionNodeStack[--recursionNodeStackTop].tryRightBranch) {
-	  x=recursionNodeStack[recursionNodeStackTop].start_node->right;
-	  currentParent=recursionNodeStack[recursionNodeStackTop].parentIndex;
-	  recursionNodeStack[currentParent].tryRightBranch=1;
-	  stuffToDo = ( x != nil);
+	while(stuffToDo) {
+		if (Overlap(low,high,x->key,x->high) ) {
+			enumResultStack->Push(x->storedInterval);
+			recursionNodeStack[currentParent].tryRightBranch=1;
+		}
+		if(x->left->maxHigh >= low) { // implies x != nil
+			if ( recursionNodeStackTop == recursionNodeStackSize ) {
+				recursionNodeStackSize *= 2;
+				recursionNodeStack = (G_ITRecursionNode *)
+			  realloc(recursionNodeStack,
+					  recursionNodeStackSize * sizeof(G_ITRecursionNode));
+				if (recursionNodeStack == NULL)
+					GEXIT("realloc failed in IntervalTree::Enumerate\n");
+			}
+			recursionNodeStack[recursionNodeStackTop].start_node = x;
+			recursionNodeStack[recursionNodeStackTop].tryRightBranch = 0;
+			recursionNodeStack[recursionNodeStackTop].parentIndex = currentParent;
+			currentParent = recursionNodeStackTop++;
+			x = x->left;
+		} else {
+			x = x->right;
+		}
+		stuffToDo = (x != nil);
+		while( (!stuffToDo) && (recursionNodeStackTop > 1) ) {
+			if(recursionNodeStack[--recursionNodeStackTop].tryRightBranch) {
+				x=recursionNodeStack[recursionNodeStackTop].start_node->right;
+				currentParent=recursionNodeStack[recursionNodeStackTop].parentIndex;
+				recursionNodeStack[currentParent].tryRightBranch=1;
+				stuffToDo = ( x != nil);
+			}
+		}
 	}
-    }
-  }
 #ifdef DEBUG_ASSERT
-  Assert((recursionNodeStackTop == 1),
-	 "recursionStack not empty when exiting IntervalTree::Enumerate");
+	Assert((recursionNodeStackTop == 1),
+			"recursionStack not empty when exiting IntervalTree::Enumerate");
 #endif
-  return(enumResultStack);
+	return(enumResultStack);
 }
-
-
 
 int GIntervalTree::CheckMaxHighFieldsHelper(GIntervalTreeNode * y,
 				    const int currentHigh,
-				    int match) const
-{
-  if (y != nil) {
-    match = CheckMaxHighFieldsHelper(y->left,currentHigh,match) ?
-      1 : match;
-    VERIFY(y->high <= currentHigh);
-    if (y->high == currentHigh)
-      match = 1;
-    match = CheckMaxHighFieldsHelper(y->right,currentHigh,match) ?
-      1 : match;
-  }
-  return match;
+					int match) const {
+	if (y != nil) {
+		match = CheckMaxHighFieldsHelper(y->left,currentHigh,match) ?
+				1 : match;
+		GVERIFY(y->high <= currentHigh);
+		if (y->high == currentHigh)
+			match = 1;
+		match = CheckMaxHighFieldsHelper(y->right,currentHigh,match) ?
+				1 : match;
+	}
+	return match;
 }
 
-
-
-/* Make sure the maxHigh fields for everything makes sense. *
- * If something is wrong, print a warning and exit */
+// Make sure the maxHigh fields for everything makes sense.
 void GIntervalTree::CheckMaxHighFields(GIntervalTreeNode * x) const {
   if (x != nil) {
     CheckMaxHighFields(x->left);
     if(!(CheckMaxHighFieldsHelper(x,x->maxHigh,0) > 0)) {
-      ExitProgramMacro("Error found in CheckMaxHighFields.\n");
+      GEXIT("Error found in CheckMaxHighFields.\n");
     }
     CheckMaxHighFields(x->right);
   }

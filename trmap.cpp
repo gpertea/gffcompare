@@ -2,8 +2,6 @@
 #include "gff.h"
 #include "GIntervalTree.h"
 
-using std::cout;
-
 #define VERSION "0.11.6"
 
 bool simpleOvl=false;
@@ -21,8 +19,8 @@ const char* USAGE = "trmap v" VERSION " : transcript to reference mapping and ov
 "  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
 "Options:\n"
 "  -o <outfile> write output to <outfile> instead of stdout\n"
-"  -S           report only simple reference overlap percentages, without\n"
-"               classification (one line per query)\n"
+"  -S           report only simple exon overlap percentages with reference\n"
+"               transcripts, without classification (one line per query)\n"
 "  --show-cds   add CDS:start:end info to all output transcripts\n"
 "  --strict-match : when intron chains match, the '=' overlap code is assigned\n"
 "               when all exons also match, otherwise assign the '~' code\n";
@@ -100,21 +98,23 @@ int main(int argc, char* argv[]) {
 		else if (t->strand=='-') { v=2; sidx.Add(v); }
 		else { v=1; sidx.Add(v); v=2; sidx.Add(v); }
 		for (int k=0;k<sidx.Count();++k) {
-			TemplateStack<GSeg*> * enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
-			if(enu->Size()!=0) {
+			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
+			if(enu->Count()>0) {
 				if (simpleOvl) {
-					fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
-					for (int i=0; i<enu->Size(); ++i) {
-						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
+					bool qprinted=false;
+					for (int i=0; i<enu->Count(); ++i) {
 						GffObj* r=(GffObj*)((*enu)[i]);
-						int ovlen=t->overlapLen(r);
-						if (ovlen==0)
-							GError("Error: zero length simple overlap reported! (%s vs %s)\n", t->getID(), r->getID());
-						float ovlcov=(100.00*ovlen)/r->len();
-						fprintf(outFH, "\t%s:%.1f", r->getID(), ovlcov);
-						//if (i+1<enu->Size()) fprintf(outFH, ",");
+						int ovlen=t->exonOverlapLen(*r);
+						if (ovlen!=0) {
+							float ovlcov=(100.00*ovlen)/r->len();
+							if (!qprinted) {
+								fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
+								qprinted=true;
+							}
+							fprintf(outFH, "\t%s:%.1f", r->getID(), ovlcov);
+						}
 					}
-					fprintf(outFH, "\n");
+					if (qprinted) fprintf(outFH, "\n");
 				} else {
 					fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 					t->printExonList(outFH);
@@ -123,13 +123,12 @@ int main(int argc, char* argv[]) {
 					  t->printCDSList(outFH);
 					}
 					fprintf(outFH, "\n");
-					for (int i=0; i<enu->Size(); ++i) {
+					for (int i=0; i<enu->Count(); ++i) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
 						GffObj* r=(GffObj*)((*enu)[i]);
 						int ovlen=0;
 						char ovlcode=getOvlCode(*t, *r, ovlen, strictMatching);
 						fprintf(outFH, "%c\t", ovlcode);
-						//r->printGTab(outFH);
 						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
 						r->printExonList(outFH);
