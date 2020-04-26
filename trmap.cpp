@@ -48,12 +48,12 @@ int main(int argc, char* argv[]) {
 	FILE* fr=fopen(ref_file, "r");
 	if (fr==NULL) GError("Error: could not open reference annotation file (%s)!\n", ref_file);
 
-	GffReader myR(fr, true, true);
+	GffReader* myR=new GffReader(fr, true, true);
 	const char* fext=getFileExt(ref_file);
-	if (Gstricmp(fext, "bed")==0) myR.isBED();
+	if (Gstricmp(fext, "bed")==0) myR->isBED();
 	GffObj* t=NULL;
-	GPVec<GffObj> toFree(true);
-	while ((t=myR.readNext())!=NULL) {
+	GPVec<GffObj> *toFree = new GPVec<GffObj>(true);
+	while ((t=myR->readNext())!=NULL) {
 		if (t->exons.Count()==0) continue; //skip exonless entities (e.g. genes)
 		GSTree* cTree=map_trees[t->getGSeqName()];
 		if (cTree==NULL) {
@@ -65,8 +65,9 @@ int main(int argc, char* argv[]) {
 		else if (t->strand=='-')
 			cTree->it[2].Insert(t);
 		else cTree->it[0].Insert(t);
-		toFree.Add(t);
+		toFree->Add(t);
 	}
+	delete myR;
 	FILE* outFH=NULL;
 	if (strcmp(o_file, "-")==0) outFH=stdout;
 	            else {
@@ -82,10 +83,10 @@ int main(int argc, char* argv[]) {
 			GError("Error: could not open query file (%s)!\n", q_file);
 		fext=getFileExt(q_file);
 	}
-	GffReader myQ(fq, true, true);
-	if (fext && Gstricmp(fext, "bed")==0) myQ.isBED();
+	GffReader* myQ = new GffReader(fq, true, true);
+	if (fext && Gstricmp(fext, "bed")==0) myQ->isBED();
 	t=NULL;
-	while ((t=myQ.readNext())!=NULL) {
+	while ((t=myQ->readNext())!=NULL) {
 		const char* gseq=t->getGSeqName();
 		if (!map_trees.hasKey(gseq))
 			continue; //reference sequence not present in annotation, so we can't compare
@@ -103,7 +104,7 @@ int main(int argc, char* argv[]) {
 				if (simpleOvl) {
 					bool qprinted=false;
 					for (int i=0; i<enu->Count(); ++i) {
-						GffObj* r=(GffObj*)((*enu)[i]);
+						GffObj* r=(GffObj*)enu->Get(i);
 						int ovlen=t->exonOverlapLen(*r);
 						if (ovlen!=0) {
 							float ovlcov=(100.00*ovlen)/r->len();
@@ -144,7 +145,8 @@ int main(int argc, char* argv[]) {
 		}
 		delete t;
 	}
-
+	delete myQ;
+    delete toFree;
 	fclose(outFH);
 	return 0;
 }
