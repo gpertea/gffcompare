@@ -1,9 +1,11 @@
 ## GffCompare      
-[![DOI](https://zenodo.org/badge/48200065.svg)](https://zenodo.org/badge/latestdoi/48200065)
+
 * compare and evaluate the accuracy of RNA-Seq transcript assemblers (Cufflinks, Stringtie). 
 * collapse (merge) duplicate transcripts from multiple GTF/GFF3 files (e.g. resulted from assembly of different samples)
 * classify transcripts from one or multiple GTF/GFF3 files as they relate to reference transcripts provided in a
 annotation file (also in GTF/GFF3 format)
+
+More details and usage examples can be found in the online paper: [DOI: 10.12688/f1000research.23297.1](http://dx.doi.org/10.12688/f1000research.23297.1).
 
 The official documentation and download packages for this utility can be found online here:
 http://ccb.jhu.edu/software/stringtie/gffcompare.shtml
