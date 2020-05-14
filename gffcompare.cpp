@@ -475,7 +475,7 @@ int main(int argc, char* argv[]) {
         tfiles[fi]=fopen(s.chars(),"w");
         if (tfiles[fi]==NULL)
           GError("Error creating file '%s'!\n",s.chars());
-        fprintf(tfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_gene_id\tqry_id\tnum_exons\tFPKM\tTPM\t\tcov\tlen\tmajor_iso_id\tref_match_len\n");
+        fprintf(tfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_gene_id\tqry_id\tnum_exons\tFPKM\tTPM\tcov\tlen\tmajor_iso_id\tref_match_len\n");
         if (haveRefs) {
           s=sbase;
           s.append(".refmap");
