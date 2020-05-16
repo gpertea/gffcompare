@@ -872,9 +872,9 @@ const char* findDescr(GffObj* gfobj) {
 const char* getGeneID(GffObj* gfobj) {
  //returns anything that might resemble a gene identifier for this transcript
  //or, if everything fails, returns the transcript ID
- const char* s=gfobj->getGeneName();
+ const char* s=gfobj->getGeneID();
  if (s) return s;
- if ((s=gfobj->getGeneID())!=NULL) return s;
+ if ((s=gfobj->getGeneName())!=NULL) return s;
  if ((s=gfobj->getAttr("Name"))!=NULL) return s;
  return gfobj->getID();
 }
@@ -2127,7 +2127,7 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
         //and also check for special cases with cross-strand overlaps:
         reclass_XStrand(gtrack.qdata[q]->mrnas_f, gtrack.rloci_r);
         reclass_XStrand(gtrack.qdata[q]->mrnas_r, gtrack.rloci_f);
-        // print all tmap data here here:
+        // print all tmap data here:
         for (int i=0;i<gtrack.qdata[q]->tdata.Count();i++) {
             CTData* mdata=gtrack.qdata[q]->tdata[i];
             if (mdata->mrna==NULL) continue; //invalidated -- removed earlier
