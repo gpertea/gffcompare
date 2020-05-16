@@ -482,7 +482,7 @@ int main(int argc, char* argv[]) {
           rtfiles[fi]=fopen(s.chars(),"w");
           if (rtfiles[fi]==NULL)
              GError("Error creating file '%s'!\n",s.chars());
-          fprintf(rtfiles[fi],"ref_gene_id\tref_id\tclass_code\tqry_id_list\n");
+          fprintf(rtfiles[fi],"ref_gene\tref_id\tclass_code\tqry_id_list\n");
         }
     }
     GList<GSeqData>* pdata=new GList<GSeqData>(true,true,true);
@@ -877,6 +877,16 @@ const char* getGeneID(GffObj* gfobj) {
  if ((s=gfobj->getGeneName())!=NULL) return s;
  if ((s=gfobj->getAttr("Name"))!=NULL) return s;
  return gfobj->getID();
+}
+
+const char* getGeneNameID(GffObj& gfobj) {
+ //returns anything that might resemble a gene name or gene identifier for the transcript
+ //or, if everything fails, returns the transcript ID
+ const char* s=gfobj.getGeneName();
+ if (s) return s;
+ if ((s=gfobj.getGeneID())!=NULL) return s;
+ if ((s=gfobj.getAttr("Name"))!=NULL) return s;
+ return gfobj.getID();
 }
 
 const char* getGeneID(GffObj& gfobj) {
@@ -2435,7 +2445,7 @@ void xclusterLoci(int qcount, char strand, GSeqTrack& gtrack) {
  }//for each xcluster
 }
 
-
+//writing .refmap file
 void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
   if (rloci==NULL) return;
 
@@ -2470,11 +2480,11 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
       for (int q=0;q<qcount;q++) {
         if (!eqlist[q].is_empty()) {
           eqlist[q].trimR(',');
-          fprintf(frs[q],"%s\t%s\t=\t%s\n", getGeneID(ref), ref.getID(),eqlist[q].chars());
+          fprintf(frs[q],"%s\t%s\t=\t%s\n", getGeneNameID(ref), ref.getID(),eqlist[q].chars());
         }
         if (!clist[q].is_empty()) {
           clist[q].trimR(',');
-          fprintf(frs[q],"%s\t%s\tc\t%s\n",getGeneID(ref), ref.getID(),clist[q].chars());
+          fprintf(frs[q],"%s\t%s\tc\t%s\n",getGeneNameID(ref), ref.getID(),clist[q].chars());
         }
       }
       delete[] clist;
