@@ -4,13 +4,13 @@ INCDIRS := -I${GCLIB}
 
 BASEFLAGS  = -Wall -Wextra ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
 
-GCCV8 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 8)
+CXX   := $(if $(CXX),$(CXX),g++)
+LINKER  := $(if $(LINKER),$(LINKER),g++)
+
+GCCV8 := $(shell expr `${CXX} -dumpversion | cut -f1 -d.` \>= 8)
 ifeq "$(GCCV8)" "1"
  BASEFLAGS += -Wno-class-memaccess
 endif
-
-CXX   := $(if $(CXX),$(CXX),g++)
-LINKER  := $(if $(LINKER),$(LINKER),g++)
 
 LDFLAGS := $(if $(LDFLAGS),$(LDFLAGS),-g)
 
@@ -27,12 +27,12 @@ else # debug build
   CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG -std=c++0x
   ifneq (,$(filter %memcheck %memdebug, $(MAKECMDGOALS)))
      #make memcheck : use the statically linked address sanitizer in gcc 4.9.x
-     GCCVER49 := $(shell expr `g++ -dumpversion | cut -f1,2 -d.` \>= 4.9)
+     GCCVER49 := $(shell expr `${CXX} -dumpversion | cut -f1,2 -d.` \>= 4.9)
      ifeq "$(GCCVER49)" "0"
        $(error gcc version 4.9 or greater is required for this build target)
      endif
      CXXFLAGS += -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=address
-     GCCVER5 := $(shell expr `g++ -dumpversion | cut -f1 -d.` \>= 5)
+     GCCVER5 := $(shell expr `${CXX} -dumpversion | cut -f1 -d.` \>= 5)
      ifeq "$(GCCVER5)" "1"
        CXXFLAGS += -fsanitize=bounds -fsanitize=float-divide-by-zero -fsanitize=vptr
        CXXFLAGS += -fsanitize=float-cast-overflow -fsanitize=object-size
@@ -49,8 +49,6 @@ endif
 	${CXX} ${CXXFLAGS} -c $< -o $@
 
 # C/C++ linker
-
-LINKER    := g++
 
 OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
  ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
