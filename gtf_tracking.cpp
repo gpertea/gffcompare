@@ -6,7 +6,8 @@ bool gtf_tracking_largeScale=false; //many input Cufflinks files processed at on
 int numQryFiles=0;
 
 bool qDupStrict=false;
-bool strictMatching=false;
+bool stricterMatching=false;
+int terminalMatchRange=0;
 bool noMergeCloseExons=false;
 bool debug=false;
 
@@ -293,7 +294,7 @@ int parse_mRNAs(GfList& mrnas,
 		   if (discardDups) {
 		     //check all gdata->mrnas_r (ref_data) for duplicate ref transcripts
 		     int rpidx=-1;
-		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true); 
+		     GffObj* rp= is_TDup(m, *target_mrnas, rpidx, true);
 		       //always strict checking of reference duplicates: containment required
 		     if (rp!=NULL) { //duplicate found
 		      //discard one of them
@@ -527,7 +528,7 @@ void gatherRefLocOvls(GffObj& m, GLocus& rloc) {
 	for (int i=0;i<rloc.mrnas.Count();i++) {
 		GffObj* r=rloc.mrnas[i];
 		int olen=0;
-		char ovlcode=getOvlCode(m,*r,olen, strictMatching);
+		char ovlcode=getOvlCode(m,*r,olen, stricterMatching);
 		if (ovlcode!=0) { //has some sort of overlap with r
 			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
 			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }

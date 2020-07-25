@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.11.6"
+#define VERSION "0.11.7"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -27,11 +27,6 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     of GTF files should be processed)\n\
 \n\
  -r reference annotation file (GTF/GFF)\n\
- --strict-match : transcript and exon matching require full exon matching\n\
-    (including terminal exons); code '=' is only assigned only if all exons\n\
-    match; code '~' is assigned for a full intron chain match, or, in the \n\
-    case of  single exon transcripts, for a significant overlap\n\
-\n\
  -R for -r option, consider only the reference transcripts that\n\
     overlap any of the input transfrags (Sn correction)\n\
  -Q for -r option, consider only the input transcripts that\n\
@@ -55,13 +50,20 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     repeats must be soft-masked (lower case) in order to be able to classify\n\
     transfrags as repeats\n\
 \n\
- -T do not generate .tmap and .refmap files for each input file\n\
- -e when estimating exon and transcript level accuracy, the maximum range\n\
-    variation allowed for the free ends of terminal exons (default 100)\n\
+ -e when estimating exon level accuracy, this is the maximum range\n\
+    variation allowed for the free ends of terminal exons (default 100);\n\
+	this terminal exon restriction  applies to transcript level accuracy\n\
+	when --strict-match option is given\n\
+ --strict-match : transcript matching takes into account the -e range\n\
+    for terminal exons; code '=' is only assigned if transcript ends are\n\
+    within that range, otherwise code '~' is assigned just for intron chain\n\
+    match (or significant overlap in the case of single exon transcripts)\n\
+\n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
+ -T do not generate .tmap and .refmap files for each input file\n\
  --chr-stats: the .stats file will show summary and accuracy data\n\
-   for each reference contig/chromosome separately\n\
+   per reference contig/chromosome\n\
  --debug : enables -V and generates additional files: \n\
     <outprefix>.Q_discarded.lst, <outprefix>.missed_introns.gff,\n\
     <outprefix>.R_missed.lst\n\
@@ -267,8 +269,8 @@ int main(int argc, char* argv[]) {
   gid_add_ref_gnames=(args.getOpt("gidnames")!=NULL);
   qDupDiscard=(args.getOpt('D')!=NULL);
   qDupStrict=(args.getOpt('S')!=NULL);
-  strictMatching=(args.getOpt("strict-match")!=NULL);
-  if (strictMatching) exonEndRange=0;
+  stricterMatching=(args.getOpt("strict-match")!=NULL);
+  //if (stricterMatching) exonEndRange=0;
   noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
@@ -326,14 +328,11 @@ int main(int argc, char* argv[]) {
   if (!s.is_empty()) cprefix=Gstrdup(s.chars());
                else  cprefix=Gstrdup("TCONS");
   s=args.getOpt('e');
-  if (!s.is_empty()) {
-	  if (strictMatching) {
-		  GMessage("Warning: -e option ignored (set to 0 by --strict-match).\n");
-		  exonEndRange=0;
-	  }
-	  else exonEndRange=s.asInt();
-  }
-  if (exonEndRange==0) strictMatching=true;
+  if (!s.is_empty())
+	  exonEndRange=s.asInt();
+  if (stricterMatching)
+	  terminalMatchRange=exonEndRange;
+
   s=args.getOpt('d');
   if (!s.is_empty()) tssDist=s.asInt();
 
@@ -569,9 +568,6 @@ void show_exons(FILE* f, GffObj& m) {
 bool exon_match(GXSeg& r, GXSeg& q, uint fuzz=0) {
  uint sd = (r.start>q.start) ? r.start-q.start : q.start-r.start;
  uint ed = (r.end>q.end) ? r.end-q.end : q.end-r.end;
- if (fuzz==0 && strictMatching) {
-	 return (sd==0 && ed==0);
- }
  uint ex_range=exonEndRange;
  if (ex_range<=fuzz) ex_range=fuzz;
  if ((r.flags&1) && (q.flags&1)) { // first exon ?
@@ -784,52 +780,54 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   GFREE(qtpinovl);
 
   // ---- now intron-chain and transcript matching
-  GVec<int> matched_refs(super->rmrnas.Count(), 0); //keep track of matched refs
+  GVec<char> matched_refs(super->rmrnas.Count(), '\0'); //keep track of matched refs
+                              //'=' when "exact" (within terminalMatchRange), or if no strict matching was requested
+                              //'~' when stricter transcript matching is activated and only the intron chain was matched
   //GVec<int> amatched_refs(super->rmrnas.Count(), 0); //keep track of fuzzy-matched refs
   for (int i=0;i<super->qmrnas.Count();i++) {
 	  uint istart=super->qmrnas[i]->exons.First()->start;
 	  uint iend=super->qmrnas[i]->exons.Last()->end;
 	  for (int j=0;j<super->rmrnas.Count();j++) {
-		  if (matched_refs[j]>0) continue; //already counted this TP
+		  if (matched_refs[j]=='=') continue; //already counted as ichainTP and mrnaTP
 		  uint jstart=super->rmrnas[j]->exons.First()->start;
 		  uint jend=super->rmrnas[j]->exons.Last()->end;
 		  if (iend<jstart) break;
 		  if (jend<istart) continue;
 		  //--- overlapping  transcripts ---
-		  //bool exonMatch=false;
 		  if (super->qmrnas[i]->udata & 2) continue; //already found a matching ref for this
 		  GLocus* qlocus=((CTData*)super->qmrnas[i]->uptr)->locus;
 		  GLocus* rlocus=((CTData*)super->rmrnas[j]->uptr)->locus;
 		  int ovlen=0;
-		  //look for a transcript match ('=' code)
-		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen);
-		  bool isTMatch=(tmatch>0);
-		  if (isTMatch) {
+		  //look for a transcript match ('=' code for full exact exons match, '~' )
+		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, terminalMatchRange);
+		  //bool isTMatch=(tmatch>0);
+		  if (tmatch) {
+			  if (!stricterMatching) tmatch='=';
 			  //at least the intron chains match !
 			  if (super->qmrnas[i]->exons.Count()>1) {
 				  super->ichainTP++;
 				  qlocus->ichainTP++;
-				  rlocus->ichainTP++;
+				  if ((super->qmrnas[i]->udata & 4) == 0) {
+					  super->qmrnas[i]->udata |= 4;
+				  }
+				  if (matched_refs[j]==0) {
+					  rlocus->ichainTP++;
+					  matched_refs[j]=tmatch;
+				  }
 			  }
-			  if (strictMatching && tmatch!='=')
-				  isTMatch=false;
-			  if (isTMatch && exonEndRange>0 &&
-					  tMaxOverhang(*(super->qmrnas[i]),*(super->rmrnas[j]))>exonEndRange) {
-                   isTMatch=false;
+			  if (tmatch=='=') { //"full" or strict match
+				  super->mrnaTP++;
+				  qlocus->mrnaTP++;
+				  rlocus->mrnaTP++;
+				  if ((super->qmrnas[i]->udata & 2) ==0) {
+					  super->qmrnas[i]->udata|=2;
+				  }
+				  matched_refs[j]='=';
 			  }
-		  }
-		  if (isTMatch) {
-			  super->qmrnas[i]->udata|=2;
-			  matched_refs[j]++;
-			  //fprintf(stderr, "%s (%c) tMatched %s (%c)\n", super->qmrnas[i]->getID(),
-			  //  super->qmrnas[i]->strand, super->rmrnas[j]->getID(), super->rmrnas[j]->strand); //DEBUG ONLY
-			  super->mrnaTP++;
-			  qlocus->mrnaTP++;
-			  rlocus->mrnaTP++;
-		  }
+		  } // ichain match found
 	  } //ref loop
   } //qry loop
-  //now print unmatched references, if requested
+  //-- show missed references (not "matched" either '~' or '=') if requested
   if (f_rmiss!=NULL) {
 	  for (int i=0;i<super->rmrnas.Count();i++) {
 		  if (matched_refs[i]==0)
@@ -1614,15 +1612,15 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
     //fprintf(fout, "======> Exon stats: %d total_qexons, %d total_rexons, %d exonTP, %d exonFP, %d exonFN\n",
     //   ps->total_rexons, ps->total_qexons, ps->exonTP, ps->exonFP, ps->exonFN);
     fprintf(fout, "        Exon level:   %5.1f     |   %5.1f    |\n",sn, sp);
-  if (ps->total_rintrons>0) {
-    //intron level
-    sp=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFP);
-    sn=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFN);
-    fprintf(fout, "      Intron level:   %5.1f     |   %5.1f    |\n",sn, sp);
-    //intron chains:
-    sp=(100.0*(double)ps->ichainTP)/ps->total_qichains;
-    sn=(100.0*(double)ps->ichainTP)/ps->total_richains;
-    fprintf(fout, "Intron chain level:   %5.1f     |   %5.1f    |\n",sn, sp);
+    if (ps->total_rintrons>0) {
+      //intron level
+      sp=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFP);
+      sn=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFN);
+      fprintf(fout, "      Intron level:   %5.1f     |   %5.1f    |\n",sn, sp);
+      //intron chains:
+      sp=(100.0*(double)ps->ichainTP)/ps->total_qichains;
+      sn=(100.0*(double)ps->ichainTP)/ps->total_richains;
+      fprintf(fout, "Intron chain level:   %5.1f     |   %5.1f    |\n",sn, sp);
     }
     sp=(100.0*(double)ps->mrnaTP)/ps->total_qmrnas;
     sn=(100.0*(double)ps->mrnaTP)/ps->total_rmrnas;
@@ -1717,7 +1715,7 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
 		  }
 	  */
 	  //for class code output, '~' should be shown as '=' unless strict matching was requested!
-	  if (eqcode=='~' && !strictMatching) { eqcode='='; olen--; }
+	  if (eqcode=='~' && !stricterMatching) { eqcode='='; olen--; }
 	  mdata->addOvl(eqcode,rloc.mrnas[r], olen);
       //this must be called only for the head of an equivalency chain
       CTData* rdata=(CTData*)rloc.mrnas[r]->uptr;

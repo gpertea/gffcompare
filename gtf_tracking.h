@@ -17,7 +17,8 @@ extern int numQryFiles;
 extern bool gtf_tracking_verbose;
 extern bool gtf_tracking_largeScale;
 extern bool qDupStrict;
-extern bool strictMatching;
+extern bool stricterMatching;
+extern int terminalMatchRange;
 extern bool noMergeCloseExons;
 extern bool debug;
 //many input files, no accuracy stats are generated, no *.tmap

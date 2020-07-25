@@ -5,7 +5,7 @@
 #define VERSION "0.11.6"
 
 bool simpleOvl=false;
-bool strictMatching=false;
+bool stricterMatching=false;
 bool showCDS=false;
 
 struct GSTree {
@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 		exit(EXIT_SUCCESS);
 	}
 	if (args.getOpt('S')) simpleOvl=true;
-	if (args.getOpt("strict-match")) strictMatching=true;
+	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
 
 	GHash<GSTree> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
 						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
 						GffObj* r=(GffObj*)((*enu)[i]);
 						int ovlen=0;
-						char ovlcode=getOvlCode(*t, *r, ovlen, strictMatching);
+						char ovlcode=getOvlCode(*t, *r, ovlen, stricterMatching);
 						fprintf(outFH, "%c\t", ovlcode);
 						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
