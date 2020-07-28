@@ -58,7 +58,7 @@ OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
 all debug release static memcheck memdebug : ../gclib gffcompare trmap
 
 ../gclib:
-	$(shell cd .. && git clone https://github.com/gpertea/gclib.git)
+	git clone https://github.com/gpertea/gclib.git ../gclib
 
 ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
