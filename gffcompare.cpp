@@ -1601,14 +1601,7 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
     }
     stotal.addStats(stats);
     if (!perContigStats) return;
-    //---------------debug only!
-    //int total_reftrans=0;
-    //if (refdata) total_reftrans=refdata->mrnas_f.Count()+refdata->mrnas_r.Count();
-    //if (ps->total_rmrnas!=total_reftrans)
-    //   fprintf(fout, "%s\t%d\t%d\n", setname, ps->total_rmrnas, total_reftrans);
   }
-  //----------- DEBUG only
-  //return; //FIXME
 
   ps->calcF();
   if (seqdata!=NULL) fprintf(fout, "#> Genomic sequence: %s \n", setname);
