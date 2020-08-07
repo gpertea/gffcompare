@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.11.7"
+#define VERSION "0.11.8"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -95,7 +95,6 @@ bool discardContained=false; //activated by -C, -A or -X
 bool keepAltTSS=false; //-A option
 bool keepRefMatching=false; //-K with -C/-A/-X
 bool allowIntronSticking=false; //-X option
-bool reduceRefs=false; //-R
 bool reduceQrys=false; //-Q
 bool checkFasta=false;
 bool tmapFiles=true;
@@ -189,7 +188,7 @@ GList<GSeqData> ref_data(true,true,true); //list of reference mRNAs and loci dat
 void processLoci(GSeqData& seqdata, GSeqData* refdata=NULL, int qfidx=0);
 
 void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
-       GSeqData* seqdata=NULL, GSeqData* refdata=NULL);
+       GSeqData* seqdata=NULL, GSeqData* refdata=NULL, int qfidx=-1);
 
 GSeqData* getQryData(int gid, GList<GSeqData>& qdata);
 void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** ftr, FILE** frs);
@@ -235,6 +234,12 @@ void RefReqCheck(bool v, const char* opt) {
 			USAGE, opt);
 }
 
+
+void prepRefLoci(GList<GLocus> & rloci, int qcount) {
+	for (int i=0;i<rloci.Count();i++)
+      for (int q=0;q<qcount;q++)
+    	  rloci[i]->qlocovls.Add(new GList<GLocus>(true, false, true));
+}
 
 
 int main(int argc, char* argv[]) {
@@ -384,6 +389,14 @@ int main(int argc, char* argv[]) {
     		(multiexonrefs_only || multiexon_only));
     haveRefs=(ref_data.Count()>0);
     //if (gtf_tracking_verbose) GMessage("..reference annotation loaded\n");
+    if (haveRefs && !gtf_tracking_largeScale) {
+    	//prepare qlocovls for each ref locus
+    	for (int i=0;i<ref_data.Count();i++) {
+    		prepRefLoci(ref_data[i]->loci_f, qryfiles.Count());
+    		prepRefLoci(ref_data[i]->loci_r, qryfiles.Count());
+    	}
+    }
+
   }
   if (args.getOpt('C')) discardContained=true;
   if (args.getOpt('A')) {
@@ -492,8 +505,7 @@ int main(int argc, char* argv[]) {
     //}
     read_mRNAs(f_in, *pdata, &ref_data, !gffAnnotate, fi, in_file.chars(), multiexon_only);
     GSuperLocus gstats;
-    GFaSeqGet *faseq=NULL;
-    for (int g=0;g<pdata->Count();g++) { //for each genomic sequence
+    for (int g=0;g<pdata->Count();g++) { //for each genomic sequence in this qry dataset
         int gsid=pdata->Get(g)->get_gseqid();
         GSeqData* refdata=getRefData(gsid, ref_data);//ref data for this contig
         if (!gtf_tracking_largeScale)
@@ -507,11 +519,10 @@ int main(int argc, char* argv[]) {
         seqtrack->qdata[fi]=pdata->Get(g);
         //will only gather data into stats if perContig==false
         if (!gtf_tracking_largeScale) reportStats(f_out, getGSeqName(gsid), gstats,
-              pdata->Get(g), refdata);
-        if (faseq!=NULL) delete faseq;
-    } //for each genomic sequence data
-    //there could be genomic sequences with no qry transcripts
-    //but with reference transcripts
+              pdata->Get(g), refdata, fi);
+    } //for each genomic sequence data for the current query file
+    //-- there could also be genomic sequences with no qry transcripts
+    //   but only reference transcripts so they weren't found above
     if (haveRefs && !reduceRefs && !gtf_tracking_largeScale) {
         for (int r=0;r<ref_data.Count();r++) {
           GSeqData* refdata=ref_data[r];
@@ -524,7 +535,7 @@ int main(int argc, char* argv[]) {
     //now report the summary:
     if (!gtf_tracking_largeScale) reportStats(f_out, in_file.chars(), gstats);
       //qfileno++;
-  }//for each input file
+  }//for each query file
   if (f_mintr!=NULL) fclose(f_mintr);
   if (f_qdisc!=NULL) fclose(f_qdisc);
   if (f_rmiss!=NULL) fclose(f_rmiss);
@@ -585,12 +596,21 @@ bool exon_match(GXSeg& r, GXSeg& q, uint fuzz=0) {
  return true;
 }
 
+void addQLocOvl(GLocus* rloc, GLocus* qloc, int qfidx) {
+	//adds a qloc to a list of qloc overlaps (cmpovl list) based on qfidx
+	//only applies to a ref locus
+	if (qfidx>=rloc->qlocovls.Count())
+		GError("Error: addQLocOvl() not ready!\n");
+	rloc->qlocovls[qfidx]->Add(qloc);
+}
+
 void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
                              GList<GLocus>& refloci, int qfidx) {
  cmpdata.Clear();//a new list of superloci will be built
  if (refloci.Count()==0 || loci.Count()==0) return;
  //reset cmpovl and stats
- for (int i=0;i<refloci.Count();i++) refloci[i]->creset();
+ for (int i=0;i<refloci.Count();i++)
+	 refloci[i]->creset();
  //find loci with overlapping refloci
  //and store cmpovl links both ways for ALL loci and refloci on this strand
  for (int l=0;l<loci.Count();l++) {
@@ -604,8 +624,10 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
      if (locus->start>refloci[j]->end) continue;
      //must check for proper exon overlap:
      if (locus->exonOverlap(*refloci[j])) {
-        locus->cmpovl.Add(refloci[j]);
-        refloci[j]->cmpovl.Add(locus);
+    	 //cmpovl is a list of exon-overlapping loci
+        locus->cmpovl.Add(refloci[j]); //qry locus adds this overlapping ref locus
+        refloci[j]->cmpovl.Add(locus); //ref locus adds this overlapping qry locus
+        addQLocOvl(refloci[j], locus, qfidx);
      }
    }//for each reflocus
  } //for each locus
@@ -633,20 +655,17 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
             	  lstack.Push(rloc->cmpovl[ll]);
           }
         }
-      } //for each overlapping reflocus
+      } //for each overlapping ref locus
   } //while linking
 
   if (super->qloci.Count()==0) {
     delete super;
-    continue; //try next query loci
+    continue; //try next query locus
   }
   //--here we have a "superlocus" region data on both qry and ref
   // -- analyze mexons matching (base level metrics)
   cmpdata.Add(super);
   //make each ref locus keep track of all superloci containing it
-    for (int rl=0;rl<super->rloci.Count();rl++) {
-      super->rloci[rl]->superlst->Add(super);
-      }
   for (int x=0;x<super->rmexons.Count();x++) {
     super->rbases_all += super->rmexons[x].end-super->rmexons[x].start+1;
   }
@@ -1008,7 +1027,7 @@ class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
              c->tcons->getGeneID()!=NULL &&
             strcmp(tsscl.Get(0)->tcons->getGeneID(), c->tcons->getGeneID()))
         //don't tss cluster if they don't have the same GeneID (?)
-        //FIXME: we might not want this if input files are not from Cufflinks
+        //CHECKME: we might not want this if input files are not from Cufflinks
         //       and they could simply lack proper GeneID
           return false;
       */
@@ -1416,20 +1435,28 @@ void processLoci(GSeqData& seqdata, GSeqData* refdata, int qfidx) {
      }
 }
 
-//adjust stats for a list of unoverlapped (completely missed) ref loci
 void collectRLocData(GSuperLocus& stats, GLocus& loc) {
+	//this is only called for ref loci not overlapping any query loci
+	stats.total_rloci++;
 	stats.total_rmrnas+=loc.mrnas.Count();
+	stats.total_richains+=loc.ichains;
+	stats.total_rmexons+=loc.mexons.Count();
 	stats.total_rexons+=loc.uexons.Count();
 	stats.total_rintrons+=loc.introns.Count();
-	stats.total_rmexons+=loc.mexons.Count();
-	stats.total_richains+=loc.ichains;
-	stats.m_exons+=loc.uexons.Count();
-	stats.m_introns+=loc.introns.Count();
-	stats.total_rloci++;
+	stats.m_exons+=loc.uexons.Count(); //missed ref exons
+	stats.m_introns+=loc.introns.Count(); //missed ref introns
 	stats.m_loci++; //missed ref loci
 	for (int e=0;e<loc.mexons.Count();e++) {
 		 stats.rbases_all+=loc.mexons[e].end-loc.mexons[e].start+1;
 	}
+}
+
+void collectRNOvl(GSuperLocus& stats, GList<GLocus>& loci, int qfidx) { //, const char* gseqname) {
+  for (int l=0;l<loci.Count();l++) {
+    if (loci[l]->qlocovls[qfidx]->Count()==0) // cmpovl is across all query files so it won't account
+    	                            //for refs if a previous query set cmpovl for that ref locus
+      collectRLocData(stats,*loci[l]);
+  }
 }
 
 void collectRData(GSuperLocus& stats, GList<GLocus>& loci) {
@@ -1486,17 +1513,6 @@ void printLocus(FILE* f, GLocus& loc, const char* gseqname) {
     }
 }
 
-void collectRNOvl(GSuperLocus& stats, GList<GLocus>& loci) { //, const char* gseqname) {
-  for (int l=0;l<loci.Count();l++) {
-    if (loci[l]->cmpovl.Count()==0) {
-      //if (f_mloci!=NULL)
-      //      printLocus(f_mloci,*loci[l], gseqname);
-      collectRLocData(stats,*loci[l]);
-      }
-  }
-}
-
-
 void collectCmpData(GSuperLocus& stats, GList<GSuperLocus>& cmpdata) { //, const char* gseqname) {
  for (int c=0;c<cmpdata.Count();c++) {
    stats.addStats(*cmpdata[c]);
@@ -1527,30 +1543,29 @@ void printLocQ(FILE *f, GLocus& loc) {
 }
 
 
-void collectStats(GSuperLocus& stats, GSeqData* seqdata, GSeqData* refdata) {
+void collectStats(GSuperLocus& stats, GSeqData* seqdata, GSeqData* refdata, int qfidx) {
  //collect all stats for a single genomic sequence into stats
- if (seqdata==NULL) {
+ if (seqdata==NULL) { //for contig/chromosome with no qry data
    if (reduceRefs || refdata==NULL) return;
-   //special case with completely missed all refs on a contig/chromosome
    collectRData(stats, refdata->loci_f);
    collectRData(stats, refdata->loci_r);
    return;
-   }
+ }
 
  if (refdata==NULL) {//reference data missing on this contig
-	 for (int l=0;l<seqdata->loci_f.Count();l++) {
-	     seqdata->nloci_f.Add(seqdata->loci_f[l]);
-	 }
-	 for (int l=0;l<seqdata->loci_r.Count();l++) {
-	     seqdata->nloci_r.Add(seqdata->loci_r[l]);
-	 }
+   for (int l=0;l<seqdata->loci_f.Count();l++) {
+      seqdata->nloci_f.Add(seqdata->loci_f[l]);
+   }
+   for (int l=0;l<seqdata->loci_r.Count();l++) {
+      seqdata->nloci_r.Add(seqdata->loci_r[l]);
+   }
    if (reduceQrys) return;
 
    collectQData(stats, seqdata->loci_f);
    collectQData(stats, seqdata->loci_r);
    collectQU(stats, seqdata->nloci_u);
    return;
-   }
+ }
  //collect data for overlapping superloci (already in seqdata->gstats_f/_r)
  collectCmpData(stats, seqdata->gstats_f);
  collectCmpData(stats, seqdata->gstats_r);
@@ -1561,20 +1576,20 @@ void collectStats(GSuperLocus& stats, GSeqData* seqdata, GSeqData* refdata) {
  if (!reduceQrys) {
    collectQU(stats, seqdata->nloci_u);
  }
- if (!reduceRefs) { //find ref loci with empty cmpovl and add them
-  collectRNOvl(stats, refdata->loci_f);
-  collectRNOvl(stats, refdata->loci_r);
-  }
+ if (!reduceRefs) {
+   collectRNOvl(stats, refdata->loci_f, qfidx);
+   collectRNOvl(stats, refdata->loci_r, qfidx);
+ }
 }
 
 void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
-                          GSeqData* seqdata, GSeqData* refdata) {
+                          GSeqData* seqdata, GSeqData* refdata, int qfidx) {
   GSuperLocus stats;
   bool finalSummary=(seqdata==NULL && refdata==NULL);
   GSuperLocus *ps=(finalSummary ? &stotal : &stats );
   if (!finalSummary) { //collecting contig stats
     //gather statistics for all loci/superloci here
-    collectStats(stats, seqdata, refdata);
+    collectStats(stats, seqdata, refdata, qfidx);
     if (f_qdisc!=NULL) {
     	printLociQ(f_qdisc, seqdata->nloci_f, 'F');
     	printLociQ(f_qdisc, seqdata->nloci_r, 'R');
@@ -1582,7 +1597,15 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
     }
     stotal.addStats(stats);
     if (!perContigStats) return;
-    }
+    //---------------debug only!
+    //int total_reftrans=0;
+    //if (refdata) total_reftrans=refdata->mrnas_f.Count()+refdata->mrnas_r.Count();
+    //if (ps->total_rmrnas!=total_reftrans)
+    //   fprintf(fout, "%s\t%d\t%d\n", setname, ps->total_rmrnas, total_reftrans);
+  }
+  //----------- DEBUG only
+  //return; //FIXME
+
   ps->calcF();
   if (seqdata!=NULL) fprintf(fout, "#> Genomic sequence: %s \n", setname);
                 else fprintf(fout, "\n#= Summary for dataset: %s \n", setname);

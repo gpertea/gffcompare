@@ -21,6 +21,7 @@ extern bool stricterMatching;
 extern int terminalMatchRange;
 extern bool noMergeCloseExons;
 extern bool debug;
+extern bool reduceRefs;
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
 
@@ -385,11 +386,11 @@ public:
 	GArray<GXSeg> uexons; //list of unique exons (covered segments) in this region
 	GArray<GSeg> mexons; //list of merged exons in this region
 	GIArray introns;
-	GList<GLocus> cmpovl; //temp list of overlapping qry/ref loci to compare to (while forming superloci)
+	GList<GLocus> cmpovl; //list of overlapping qry/ref loci to compare to (while forming superloci)
 
-	//only for reference loci --> keep track of all superloci found for each qry dataset
-	//                           which contain this reference locus
-	GList<GSuperLocus>* superlst;
+	//only for reference loci --> keep track of all qry loci overlaps
+	//    stored in its own cmpovl list accessed by qfidx
+	GPVec< GList<GLocus> > qlocovls;
 	GXLocus* xlocus; //superlocus formed by exon overlaps across all qry datasets
 	// -- if genomic sequence was given:
 	int spl_major; // number of GT-AG splice site consensi
@@ -402,7 +403,7 @@ public:
 	//int mrnaATP;
 	int v; //user flag/data
 	GLocus(GffObj* mrna=NULL, int qidx=-1):mrnas(true,false,false),uexons(true,true),mexons(true,true),
-	  introns(), cmpovl(true,false,true) {
+	  introns(), cmpovl(true,false,true), qlocovls(true) {
 		//this will NOT free mrnas!
 		ichains=0;
 		gseq_id=-1;
@@ -412,7 +413,6 @@ public:
 		xlocus=NULL;
 		mrna_maxcov=NULL;
 		mrna_maxscore=NULL;
-		superlst=new GList<GSuperLocus>(true,false,false);
 		if (mrna!=NULL) {
 			start=mrna->exons.First()->start;
 			end=mrna->exons.Last()->end;;
@@ -440,9 +440,6 @@ public:
 			mrna_maxscore=mrna;
 			mrna_maxcov=mrna;
 		}
-	}
-	~GLocus() {
-		delete superlst;
 	}
 	void creset() {
 		spl_major=0;spl_rare=0;spl_wrong=0;
@@ -658,7 +655,8 @@ public:
     int total_qintrons; //unique introns
     int total_qichains; //total multi-exon transfrags predicted (incl. duplicates if -G)
 
-    // NOTE: these ref totals are only limited to data from loci overlapping any qry loci
+    // NOTE: if reduceRefs these ref totals are limited to data
+    //       from loci overlapping any qry loci
     int total_rmexons;
     int total_rloci;
     int total_rmrnas;
@@ -776,20 +774,26 @@ public:
 		qintrons.Add(loc.introns);
 		total_qintrons+=loc.introns.Count();
 	}
+
     void addRlocus(GLocus& loc) {
+    	//--this is only called for ref loci that have overlaps
+    	//  with at least one query locus
 		if (start==0 || start>loc.start) start=loc.start;
 		if (end<loc.end) end=loc.end;
 		rloci.Add(&loc);
-		total_rloci++;
 		rmrnas.Add(loc.mrnas);
-		total_rmrnas+=loc.mrnas.Count();
-		total_richains+=loc.ichains;
+		//if (reduceRefs) {
+		  //partial refs counting (only for overlapping loci)
+  		  total_rloci++;
+		  total_rmrnas+=loc.mrnas.Count();
+		  total_richains+=loc.ichains;
+		  total_rmexons+=loc.mexons.Count();
+		  total_rexons+=loc.uexons.Count();
+		  total_rintrons+=loc.introns.Count();
+		//}
 		rmexons.Add(loc.mexons);
-		total_rmexons+=loc.mexons.Count();
 		ruexons.Add(loc.uexons);
-		total_rexons+=loc.uexons.Count();
 		rintrons.Add(loc.introns);
-		total_rintrons+=loc.introns.Count();
 	}
 
     void calcF() {
@@ -802,24 +806,8 @@ public:
 		//intron stats
 		intronFP=total_qintrons-intronTP;
 		intronFN=total_rintrons-intronTP;
-		/* intronAFN=total_rintrons-intronATP;
-		intronAFP=total_qintrons-intronATP;
-		exonAFP=total_qexons-exonATP;
-		exonAFN=total_rexons-exonATP; */
-
-		// ichain and transcript levels:
-		//ichainAFP=total_qichains-ichainATP;
-		//ichainFP=total_qichains-ichainTP;
-		//ichainAFN=total_richains-ichainATP;
-		//ichainFN=total_richains-ichainTP;
-		//mrnaFP=total_qmrnas-mrnaTP;
-		//mrnaFN=total_rmrnas-mrnaTP;
-		//mrnaAFP=total_qmrnas-mrnaATP;
-		//mrnaAFN=total_rmrnas-mrnaATP;
 		// locus/gene level:
 		locusFP=total_qloci-locusQTP;
-		/*locusAFN=total_rloci-locusATP;
-		locusAFP=total_qloci-locusAQTP;*/
 		locusFN=total_rloci-locusTP;
 	}
 
@@ -834,14 +822,6 @@ public:
 		mrnaTP+=s.mrnaTP;
 		locusTP+=s.locusTP;
 		locusQTP+=s.locusQTP;
-		/*
-		mrnaATP+=s.mrnaATP;
-		exonATP+=s.exonATP;
-		intronATP+=s.intronATP;
-		ichainATP+=s.ichainATP;
-		locusATP+=s.locusATP;
-		locusAQTP+=s.locusAQTP;
-		*/
 		m_exons+=s.m_exons;
 		w_exons+=s.w_exons;
 		m_introns+=s.m_introns;
