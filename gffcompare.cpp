@@ -101,9 +101,12 @@ bool tmapFiles=true;
 //ref gene_id or gene_name values are separated by '|' (pipe character) when
 //appended to the original gene_id
 //gene_name values are separated by ',' (comma) in the gene_name attribute
+
+//CHECKME are we using these?
 bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_names
 bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
+
 bool qDupDiscard=false;
 
 //strictMatching=false; // really match *all* exon coords for '=' class code!
@@ -234,7 +237,8 @@ void RefReqCheck(bool v, const char* opt) {
 			USAGE, opt);
 }
 
-
+//preallocate the cmpovl slots for ref loci,
+// to keep the info about the query loci overlapping each of them by qfidx
 void prepRefLoci(GList<GLocus> & rloci, int qcount) {
 	for (int i=0;i<rloci.Count();i++)
       for (int q=0;q<qcount;q++)
