@@ -2,7 +2,6 @@
 ver=$(fgrep '#define VERSION ' gffcompare.cpp)
 ver=${ver#*\"}
 ver=${ver%%\"*}
-git fetch --tags
 if [[ "$1" == "delete" || "$1" == "del" ]]; then
   echo "Deleting tag v$ver .."
   git tag -d v$ver
