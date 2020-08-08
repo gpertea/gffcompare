@@ -1,3 +1,3 @@
-ref_gene_id	ref_id	class_code	qry_id_list
+ref_gene	ref_id	class_code	qry_id_list
 PRSS58	rna157473	=	STRG.3|STRG.3.1
 TRY2P	rna157474	c	STRG.4|STRG.4.2

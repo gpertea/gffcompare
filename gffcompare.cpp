@@ -102,7 +102,7 @@ bool tmapFiles=true;
 //appended to the original gene_id
 //gene_name values are separated by ',' (comma) in the gene_name attribute
 
-//CHECKME are we using these?
+//TODO implement these
 bool set_gene_name=false; //gene_name set to the list of overlapping ref gene_names
 bool gid_add_ref_gids=false; //append overlapping ref gene_ids to gene_id
 bool gid_add_ref_gnames=false; //append overlapping ref gene_names to gene_id
