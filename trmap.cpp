@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
 
-	GHash<GSTree> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
+	GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
 

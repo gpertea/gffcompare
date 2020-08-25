@@ -1,12 +1,8 @@
 #ifndef E_INTERVAL_TREE
 #define E_INTERVAL_TREE
 
-//#include "TStack.hh"
 #include "GBase.h"
 #include "GVec.hh"
-//#include <math.h>
-//#include <limits.h>
-//#include <iostream>
 
 // This is an interval tree implementation based on red-black-trees
 // as described in the book _Introduction_To_Algorithms_ by Cormen, Leisserson, and Rivest.

@@ -206,7 +206,7 @@ FILE* f_rmiss=NULL; //missed ref transcripts (debug only)
 bool multiexon_only=false;
 bool multiexonrefs_only=false;
 
-GHash<GStr> refdescr;
+GHash<GStr*> refdescr;
 void loadRefDescr(const char* fname);
 
 GList<GStr> qryfiles(false,true,false);
