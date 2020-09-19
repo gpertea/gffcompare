@@ -2,7 +2,7 @@
 #include "gff.h"
 #include "GIntervalTree.h"
 
-#define VERSION "0.11.6"
+#define VERSION "0.12.1"
 
 bool simpleOvl=false;
 bool stricterMatching=false;
