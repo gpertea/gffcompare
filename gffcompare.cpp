@@ -64,6 +64,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
  -T do not generate .tmap and .refmap files for each input file\n\
  --chr-stats: the .stats file will show summary and accuracy data\n\
    per reference contig/chromosome\n\
+ -j <output.tab> if -r was given, writes novel junctions in this file\n\
  --debug : enables -V and generates additional files: \n\
     <outprefix>.Q_discarded.lst, <outprefix>.missed_introns.gff,\n\
     <outprefix>.R_missed.lst\n\
@@ -202,6 +203,7 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
 FILE* f_mintr=NULL; //missed ref introns (debug only)
 FILE* f_qdisc=NULL; //discarded query transfrags (debug only)
 FILE* f_rmiss=NULL; //missed ref transcripts (debug only)
+FILE* f_nj=NULL; //-j novel junctions output file
 
 bool multiexon_only=false;
 bool multiexonrefs_only=false;
@@ -254,7 +256,7 @@ int main(int argc, char* argv[]) {
 
   GArgs args(argc, argv,
 		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;"
-		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:n:r:o:");
+		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -419,7 +421,11 @@ int main(int argc, char* argv[]) {
 	  GMessage("Warning: -K option ignored, requires -C, -A or -X\n");
 	  keepRefMatching=false;
   }
-
+  s=args.getOpt('j');
+  if (!s.is_empty()) {
+     f_nj=fopen(s.chars(),"w");
+     if (f_nj==NULL) GError("Error creating file %s!\n",s.chars());
+  }
   if (debug) { //create a few more files potentially useful for debugging
         s=outbasename;
         s.append(".missed_introns.gff");
@@ -540,9 +546,10 @@ int main(int argc, char* argv[]) {
     if (!gtf_tracking_largeScale) reportStats(f_out, in_file.chars(), gstats);
       //qfileno++;
   }//for each query file
-  if (f_mintr!=NULL) fclose(f_mintr);
-  if (f_qdisc!=NULL) fclose(f_qdisc);
-  if (f_rmiss!=NULL) fclose(f_rmiss);
+  if (f_mintr!=NULL) fclose(f_mintr); //to write missed introns
+  if (f_qdisc!=NULL) fclose(f_qdisc); //to write discarded query transcripts
+  if (f_rmiss!=NULL) fclose(f_rmiss); //to write missed references
+  if (f_nj!=NULL) fclose(f_nj); //to write missed introns
   gseqtracks.setSorted(&cmpGTrackByName);
   if (gtf_tracking_verbose && numQryFiles>1)
 	   GMessage("Tracking transcripts across %d query file(s)..\n", numQryFiles);
@@ -747,7 +754,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 
   //-- intron level stats:
   //query:
-  int* qinovl=NULL; //flags for qry introns with at least some ref overlap
+  int* qinovl=NULL; //flags for qry introns with at some ref intron overlap
   int* qtpinovl=NULL; //flags for qry introns with ref intron match
   if (super->qintrons.Count()>0) {
     GCALLOC(qinovl,super->qintrons.Count()*sizeof(int));
@@ -755,7 +762,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   }
   //-- reference:
   int* rinovl=NULL; //flags for ref introns with qry overlap
-  int* rtpinovl=NULL; //ref introns with perfect qry intron overlap
+  int* rtpinovl=NULL; //ref introns with qry intron match
   if (super->rintrons.Count()>0) {
     GCALLOC(rinovl,super->rintrons.Count()*sizeof(int));
     GCALLOC(rtpinovl,super->rintrons.Count()*sizeof(int));
@@ -783,19 +790,20 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   for (int x=0;x<super->qintrons.Count();x++) {
        if (qinovl[x]==0) {
     	   super->w_introns++;
-           //qry introns with no ref intron overlap AT ALL
+           //qry introns with no ref intron overlap at all
            super->i_qwrong.Add(super->qintrons[x]);
-       } else if (qtpinovl[x]==0) {
+       } else if (qtpinovl[x]==0) { //novel introns = qry introns with no ref intron match
              super->i_qnotp.Add(super->qintrons[x]);
-           }
+       }
   }
   for (int x=0;x<super->rintrons.Count();x++) {
-       if (rinovl[x]==0) { //no intron overlap at all
-             super->m_introns++;
+       if (rinovl[x]==0) { //no qry intron overlap at all
+             super->m_introns++; //ref introns totally missed = not having any query intron overlaps
              super->i_missed.Add(super->rintrons[x]);
-       } else if (rtpinovl[x]==0) { //no perfect intron match
+       } else if (rtpinovl[x]==0) { //no qry intron match
+    	    //ref introns with with no qry intron match
             super->i_notp.Add(super->rintrons[x]);
-          }
+       }
   }
   GFREE(rinovl);
   GFREE(rtpinovl);
@@ -1419,6 +1427,51 @@ void reportMIntrons(FILE* fm, FILE* fn, FILE* fq, char strand,
     }
 }
 
+void writeNIntron(FILE* f, char strand, GFaSeqGet* faseq, GSeg& iseg,
+                GList<GffObj>& mrnas) {
+//find all the mrnas having this intron
+  GVec<GffObj*> rms;
+  for (int i=0;i<mrnas.Count();i++) {
+   GffObj* m=mrnas[i];
+   if (m->start>iseg.end) break;
+   if (m->end<iseg.start) continue;
+   //intron coords overlaps mrna region
+   for (int j=1;j<m->exons.Count();j++) {
+      if (iseg.start==m->exons[j-1]->end+1 &&
+            iseg.end==m->exons[j]->start-1) {
+              rms.Add(m);
+            } //match found
+      }//for each intron
+   } //for each ref mrna in this locus
+ if (rms.Count()==0) GError("Error: couldn't find transcripts for intron %d-%d! (BUG)\n",
+                         iseg.start,iseg.end);
+ int ilen=iseg.end-iseg.start+1;
+ fprintf(f,"%s\t%d\t%d\t%c\t",
+            rms[0]->getGSeqName(),iseg.start,iseg.end,strand);
+
+ if (faseq!=NULL) { //print splice sites!
+   const char* gseq=faseq->subseq(iseg.start, ilen);
+   char* cseq=Gstrdup(gseq, gseq+ilen-1);
+   if (strand=='-') reverseComplement(cseq, ilen);
+   fprintf(f,"%c%c..%c%c\t", toupper(cseq[0]),toupper(cseq[1]),
+           toupper(cseq[ilen-2]),toupper(cseq[ilen-1]));
+   GFREE(cseq);
+ }
+ for (int i=0;i<rms.Count();i++) {
+    if (i) fprintf(f, ",%s", rms[i]->getID());
+    else fprintf(f, "%s", rms[i]->getID());
+ }
+ fprintf(f,"\n");
+}
+
+void reportNIntrons(FILE* fn, GFaSeqGet* fq, char strand, GList<GSuperLocus>& cmpdata) {
+	if (fn==NULL) return;
+	for (int l=0;l<cmpdata.Count();l++) {
+		GSuperLocus *sl=cmpdata[l];
+		for (int i=0;i<sl->i_qnotp.Count();i++)
+			writeNIntron(fn, strand, fq, sl->i_qnotp[i], sl->qmrnas);
+	}
+}
 
 void processLoci(GSeqData& seqdata, GSeqData* refdata, int qfidx) {
     //GList<GSeqLoci>& glstloci, GList<GSeqCmpRegs>& cmpdata)
@@ -1437,6 +1490,10 @@ void processLoci(GSeqData& seqdata, GSeqData* refdata, int qfidx) {
        reportMIntrons(f_mintr, NULL, NULL, '-', seqdata.gstats_r);
        }
      }
+  if (f_nj!=NULL) {
+	  reportNIntrons(f_nj, NULL, '+', seqdata.gstats_f);
+	  reportNIntrons(f_nj, NULL, '-', seqdata.gstats_r);
+  }
 }
 
 void collectRLocData(GSuperLocus& stats, GLocus& loc) {
