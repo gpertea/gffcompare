@@ -23,8 +23,16 @@ int cmpByPtr(const pointer p1, const pointer p2) {
   return (p1>p2) ? 1: ((p1==p2)? 0 : -1);
   }
 
-bool betterRef(GffObj* a, GffObj* b) {
+bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
+ //this is called when a query overlaps a and b with the same overlap length
+ //to decide which of a or b is closer structurally to the query
+ // returns true if a is closer, false if b is closer
  if (a==NULL || b==NULL) return (a!=NULL);
+ if (rank<CLASSCODE_OVL_RANK) {
+	 //significant intron/exon overlap -- all the 'j' codes, but includes 'e'
+	 if (a->exons.Count()!=b->exons.Count())
+		 return (abs(a->exons.Count()-numexons)<abs(b->exons.Count()-numexons));
+ }
  if (a->exons.Count()!=b->exons.Count()) return (a->exons.Count()>b->exons.Count());
  if (a->hasCDS() && !b->hasCDS())
         return true;
@@ -529,13 +537,12 @@ void gatherRefLocOvls(GffObj& m, GLocus& rloc) {
 	}
 	for (int i=0;i<rloc.mrnas.Count();i++) {
 		GffObj* r=rloc.mrnas[i];
-		int olen=0;
-		char ovlcode=getOvlCode(m,*r,olen, stricterMatching);
-		if (ovlcode!=0) { //has some sort of overlap with r
-			((CTData*)m.uptr)->addOvl(ovlcode,r,olen);
+		TOvlData ovld=getOvlData(m,*r, stricterMatching);
+		if (ovld.ovlcode!=0) { //has some sort of overlap with r
+			((CTData*)m.uptr)->addOvl(ovld,r);
 			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }
-			if (ovlcode=='c' || ovlcode=='=' || ovlcode=='~') //keep match/containment for each reference transcript
-				((CTData*)r->uptr)->addOvl(ovlcode,&m,olen);
+			if (ovld.ovlcode=='c' || ovld.ovlcode=='=' || ovld.ovlcode=='~') //keep match/containment for each reference transcript
+				((CTData*)r->uptr)->addOvl(ovld, &m);
 		}
 	}//for each ref in rloc
 	//GffObj** rr=&rovl;

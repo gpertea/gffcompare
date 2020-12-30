@@ -2172,7 +2172,7 @@ void reclass_mRNAs(char strand, GList<GffObj>& mrnas, GList<GLocus>* rloci, GFaS
     if (ovlcode=='u' || ovlcode<47) {
       //check for overlaps with ref transcripts on the other strand
       if (m.exons.Count()==1 && inPolyRun(strand, m, rloci, rlocidx)) {
-         ((CTData*)m.uptr)->addOvl('p',rloci->Get(rlocidx)->mrna_maxcov);
+         ((CTData*)m.uptr)->addOvl('p', rloci->Get(rlocidx)->mrna_maxcov);
          }
       else { //check for repeat content
          if (faseq!=NULL) {
@@ -2182,7 +2182,7 @@ void reclass_mRNAs(char strand, GList<GffObj>& mrnas, GList<GLocus>* rloci, GFaS
             int numlc=0;
             for (int c=0;c<seqlen;c++) if (seq[c]>='a') numlc++;
             if (numlc > seqlen/2)
-               ((CTData*)m.uptr)->addOvl('r');
+               ((CTData*)m.uptr)->addOvl('r', NULL, numlc);
             GFREE(seq);
             }
          }

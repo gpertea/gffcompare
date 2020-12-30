@@ -147,25 +147,36 @@ class GFastaHandler {
      }
 };
 
-bool betterRef(GffObj* a, GffObj* b); //for better CovLink reference ranking
+bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank); //for better CovLink reference ranking
 
 class GLocus;
 
 class COvLink {
 public:
     char code;
-    int rank;
+    byte rank;
+    int16_t numExons; //number of exons in the query mRNA
     GffObj* mrna;
     int ovlen;
-    COvLink(char c=0,GffObj* m=NULL, int ovl=0) {
-		code=c;
-		mrna=m;
-		ovlen=ovl;
+    int16_t numJmatch; //number of matching junctions in this overlap
+    COvLink(char c=0, GffObj* r=NULL, int exonCount=0, int olen=0, int jmatch=0):code(c),
+    		mrna(r), ovlen(olen), numJmatch(jmatch) {
+    	if (exonCount>255) exonCount=255;
+    	numExons=exonCount;
 		rank=classcode_rank(c);
 	}
-    bool operator<(COvLink& b) {
-		if (rank==b.rank)
-			return (ovlen==b.ovlen)? betterRef(mrna, b.mrna) : (ovlen>b.ovlen);
+
+    bool operator<(COvLink& b) { //lower = higher priority
+		if (rank==b.rank && b.mrna!=NULL && mrna!=NULL) {
+			if (numExons==1 && b.mrna->exons.Count()!=mrna->exons.Count()) {
+				if (mrna->exons.Count()==1) return true; //SET match always has priority
+				else if (b.mrna->exons.Count()==1) return false;
+			}
+			if (numExons>1 && b.numJmatch!=numJmatch) {
+				return (numJmatch > b.numJmatch);
+			}
+			return (ovlen==b.ovlen)? closerRef(mrna, b.mrna, numExons, rank) : (ovlen>b.ovlen);
+		}
 		else return rank<b.rank;
 	}
     bool operator==(COvLink& b) {
@@ -323,9 +334,15 @@ public:
     }
   }
 
-	void addOvl(char code,GffObj* target=NULL, int ovlen=0) {
-		ovls.AddIfNew(new COvLink(code, target, ovlen));
+	void addOvl(TOvlData& od, GffObj* target=NULL) {
+		//ovls.AddIfNew(new COvLink(code, target, ovlen));
+		ovls.AddIfNew(new COvLink(od.ovlcode,target, mrna->exons.Count(), od.ovlen, od.numJmatch));
 	}
+
+	void addOvl(char code, GffObj* target=NULL, int ovlen=0) {
+		ovls.AddIfNew(new COvLink(code, target, mrna->exons.Count(), ovlen));
+	}
+
 	char getBestCode(GffObj** r=NULL, int* ovlen=NULL) {
 		char best_ovlcode = (ovls.Count()>0) ? ovls[0]->code : 0 ;
 		if (best_ovlcode>0) {

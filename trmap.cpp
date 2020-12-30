@@ -105,24 +105,22 @@ int main(int argc, char* argv[]) {
 		if (t->exons.Count()==0)
 			continue; //only work with properly defined transcripts
 		GVec<int> sidx;
-		int v=0;
-		sidx.Add(v); //always search the '.' strand
-		if (t->strand=='+') { v=1; sidx.Add(v); }
-		else if (t->strand=='-') { v=2; sidx.Add(v); }
-		else { v=1; sidx.Add(v); v=2; sidx.Add(v); }
+		sidx.cAdd(0); //always search the '.' strand
+		if (t->strand=='+') sidx.cAdd(1);
+		else if (t->strand=='-') sidx.cAdd(2);
+		else { sidx.cAdd(1); sidx.cAdd(2); }
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
 			if(enu->Count()>0) { //overlaps found
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
 					GffObj* r=(GffObj*)enu->Get(i);
-					int ovlen=0;
-					char ovlcode=getOvlCode(*t, *r, ovlen, stricterMatching);
-					if (!fltCodes.is_empty() && !fltCodes.contains(ovlcode))
+					TOvlData od=getOvlData(*t, *r, stricterMatching);
+					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
 						continue;
 					if (simpleOvl) {
-						if (ovlen==0) continue;
-						float rcov=(100.00*ovlen)/r->len();
+						if (od.ovlen==0) continue;
+						float rcov=(100.00*od.ovlen)/r->covlen;
 						if (!qprinted) {
 							fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
 							qprinted=true;
@@ -130,8 +128,8 @@ int main(int argc, char* argv[]) {
 						//append each overlapping referenced to the same line
 						fprintf(outFH, "\t%s:%.1f", r->getID(), rcov);
 					} else if (outTab) { //3 column output
-						float rcov=(100.00*ovlen)/r->len();
-						fprintf(outFH, "%s\t%c\t%.1f\t%s\n", t->getID(), ovlcode, rcov, r->getID());
+						float rcov=(100.00*od.ovlen)/r->len();
+						fprintf(outFH, "%s\t%c\t%.1f\t%s\n", t->getID(), od.ovlcode, rcov, r->getID());
 					} else { //full pseudo-FASTA output
 						if (!qprinted) {
 							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
@@ -143,7 +141,7 @@ int main(int argc, char* argv[]) {
 							fprintf(outFH, "\n");
 							qprinted=true;
 						}
-						fprintf(outFH, "%c\t", ovlcode);
+						fprintf(outFH, "%c\t", od.ovlcode);
 						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
 						r->printExonList(outFH);
