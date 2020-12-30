@@ -1,32 +1,38 @@
 #include "GArgs.h"
 #include "gff.h"
+#include "GStr.h"
 #include "GIntervalTree.h"
 
-#define VERSION "0.12.1"
+#define VERSION "0.12.2"
 
 bool simpleOvl=false;
 bool stricterMatching=false;
 bool showCDS=false;
+bool outTab=false;
+GStr fltCodes;
 
 struct GSTree {
 	GIntervalTree it[3]; //0=unstranded, 1: +strand, 2: -strand
 };
 
-const char* USAGE = "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
-"  trmap [-S] [-o <outfile>] [--strict-match] <ref_gff> <query_gff>\n"
+const char* USAGE =
+"trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
+"  trmap [-c 'codes'] [-T | -S] [-o <outfile>] <ref_gff> <query_gff>\n"
 "Positional arguments:\n"
 "  <ref_gff>    reference annotation file name (GFF/BED format)\n"
 "  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
 "Options:\n"
 "  -o <outfile> write output to <outfile> instead of stdout\n"
+"  --show-cds   add CDS:start:end info to all transcripts with CDS\n"
+"  --strict-match : '=' overlap code is assigned when all exons match,\n"
+"               while '~' code is assigned when only introns match\n"
+"  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
+"  -T           output 4 column table: queryID, ovl_code, ref_cov%, refID\n"
 "  -S           report only simple exon overlap percentages with reference\n"
-"               transcripts, without classification (one line per query)\n"
-"  --show-cds   add CDS:start:end info to all output transcripts\n"
-"  --strict-match : when intron chains match, the '=' overlap code is assigned\n"
-"               when all exons also match, otherwise assign the '~' code\n";
+"               transcripts, without classification (one line per query)\n";
 
 int main(int argc, char* argv[]) {
-	GArgs args(argc, argv, "help;strict-match;show-cds;hSo:");
+	GArgs args(argc, argv, "help;strict-match;show-cds;hTSc:o:");
 	args.printError(USAGE, true);
 	if (args.getOpt('h') || args.getOpt("help")) {
 		GMessage(USAGE);
@@ -35,7 +41,13 @@ int main(int argc, char* argv[]) {
 	if (args.getOpt('S')) simpleOvl=true;
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
-
+	if (args.getOpt("T")) outTab=true;
+	if (outTab && simpleOvl)
+		GError("%s\nError: options -S and -T are mutually exclusive!\n", USAGE);
+    const char* s=args.getOpt('c');
+    if (s!=NULL) {
+    	fltCodes=s;
+    }
 	GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
@@ -100,35 +112,37 @@ int main(int argc, char* argv[]) {
 		else { v=1; sidx.Add(v); v=2; sidx.Add(v); }
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
-			if(enu->Count()>0) {
-				if (simpleOvl) {
-					bool qprinted=false;
-					for (int i=0; i<enu->Count(); ++i) {
-						GffObj* r=(GffObj*)enu->Get(i);
-						int ovlen=t->exonOverlapLen(*r);
-						if (ovlen!=0) {
-							float ovlcov=(100.00*ovlen)/r->len();
-							if (!qprinted) {
-								fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
-								qprinted=true;
-							}
-							fprintf(outFH, "\t%s:%.1f", r->getID(), ovlcov);
+			if(enu->Count()>0) { //overlaps found
+				bool qprinted=false;
+				for (int i=0; i<enu->Count(); ++i) {
+					GffObj* r=(GffObj*)enu->Get(i);
+					int ovlen=0;
+					char ovlcode=getOvlCode(*t, *r, ovlen, stricterMatching);
+					if (!fltCodes.is_empty() && !fltCodes.contains(ovlcode))
+						continue;
+					if (simpleOvl) {
+						if (ovlen==0) continue;
+						float rcov=(100.00*ovlen)/r->len();
+						if (!qprinted) {
+							fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
+							qprinted=true;
 						}
-					}
-					if (qprinted) fprintf(outFH, "\n");
-				} else {
-					fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
-					t->printExonList(outFH);
-					if (showCDS && t->hasCDS()) {
-					  fprintf(outFH, " CDS:");
-					  t->printCDSList(outFH);
-					}
-					fprintf(outFH, "\n");
-					for (int i=0; i<enu->Count(); ++i) {
-						//static_cast<ObjInterval*>((*enu)[i])->obj->printGxf(oFile2);
-						GffObj* r=(GffObj*)((*enu)[i]);
-						int ovlen=0;
-						char ovlcode=getOvlCode(*t, *r, ovlen, stricterMatching);
+						//append each overlapping referenced to the same line
+						fprintf(outFH, "\t%s:%.1f", r->getID(), rcov);
+					} else if (outTab) { //3 column output
+						float rcov=(100.00*ovlen)/r->len();
+						fprintf(outFH, "%s\t%c\t%.1f\t%s\n", t->getID(), ovlcode, rcov, r->getID());
+					} else { //full pseudo-FASTA output
+						if (!qprinted) {
+							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
+							t->printExonList(outFH);
+							if (showCDS && t->hasCDS()) {
+							  fprintf(outFH, " CDS:");
+							  t->printCDSList(outFH);
+							}
+							fprintf(outFH, "\n");
+							qprinted=true;
+						}
 						fprintf(outFH, "%c\t", ovlcode);
 						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
@@ -139,8 +153,10 @@ int main(int argc, char* argv[]) {
 						}
 						fprintf(outFH, "\n");
 					}
-				}
-			}
+				} //for each range overlap
+				if (simpleOvl && qprinted)
+					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
+			} //has overlaps
 			delete enu;
 		}
 		delete t;
