@@ -66,7 +66,10 @@ int main(int argc, char* argv[]) {
 	GffObj* t=NULL;
 	GPVec<GffObj> *toFree = new GPVec<GffObj>(true);
 	while ((t=myR->readNext())!=NULL) {
-		if (t->exons.Count()==0) continue; //skip exonless entities (e.g. genes)
+		if (t->exons.Count()==0) {
+			delete t;
+			continue; //skip exonless entities (e.g. genes)
+		}
 		GSTree* cTree=map_trees[t->getGSeqName()];
 		if (cTree==NULL) {
 			cTree=new GSTree();
@@ -100,10 +103,14 @@ int main(int argc, char* argv[]) {
 	t=NULL;
 	while ((t=myQ->readNext())!=NULL) {
 		const char* gseq=t->getGSeqName();
-		if (!map_trees.hasKey(gseq))
+		if (!map_trees.hasKey(gseq)) {
+			delete t;
 			continue; //reference sequence not present in annotation, so we can't compare
-		if (t->exons.Count()==0)
+		}
+		if (t->exons.Count()==0) {
+			delete t;
 			continue; //only work with properly defined transcripts
+		}
 		GVec<int> sidx;
 		sidx.cAdd(0); //always search the '.' strand
 		if (t->strand=='+') sidx.cAdd(1);
