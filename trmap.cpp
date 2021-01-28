@@ -1,6 +1,7 @@
 #include "GArgs.h"
 #include "gff.h"
 #include "GStr.h"
+#include "GBitVec.h"
 #include "GIntervalTree.h"
 
 #define VERSION "0.12.5"
@@ -9,7 +10,7 @@ bool simpleOvl=false;
 bool stricterMatching=false;
 bool showCDS=false;
 bool outTab=false;
-bool outTab_jmatch=false;
+bool novelJTab=false;
 GStr fltCodes;
 
 struct GSTree {
@@ -18,7 +19,7 @@ struct GSTree {
 
 const char* USAGE =
 "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
-"  trmap [-c 'codes'] [-T [-J] | -S] [-o <outfile>] <ref_gff> <query_gff>\n"
+"  trmap [-c 'codes'] [-T | -J | -S] [-o <outfile>] <ref_gff> <query_gff>\n"
 "Positional arguments:\n"
 "  <ref_gff>    reference annotation file name (GFF/BED format)\n"
 "  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
@@ -28,11 +29,131 @@ const char* USAGE =
 "  --strict-match : '=' overlap code is assigned when all exons match,\n"
 "               while '~' code is assigned when only introns match\n"
 "  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
-"  -T           output 4 column table: queryID, ovl_code, ref_cov%, refID\n"
-"  -J           enforces -T and add a column with the number of matched \n"
-"               junctions in reference\n"
+"  -T           output a 5 column table: \n"
+"                 queryID, ovl_code, ref_cov%, refID, matched junctions\n"
+"  -J           for each query transcripts, output an 5 column table\n"
+"                queryID, chr:strand:exons, list of reference transcripts,\n"
+"                num ref genes, list of novel junctions\n"
 "  -S           report only simple exon overlap percentages with reference\n"
 "               transcripts, without classification (one line per query)\n";
+
+bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
+ //this is called when a query overlaps a and b with the same overlap length
+ //to decide which of a or b is closer structurally to the query
+ // returns true if a is closer, false if b is closer
+ if (a==NULL || b==NULL) return (a!=NULL);
+ if (rank<CLASSCODE_OVL_RANK) {
+	 //significant intron/exon overlap -- all the 'j' codes, but includes 'e'
+	 if (a->exons.Count()!=b->exons.Count())
+		 return (abs(a->exons.Count()-numexons)<abs(b->exons.Count()-numexons));
+ }
+ if (a->exons.Count()!=b->exons.Count()) return (a->exons.Count()>b->exons.Count());
+ if (a->hasCDS() && !b->hasCDS())
+        return true;
+   else {
+     if (b->hasCDS() && !a->hasCDS()) return false;
+     return (a->covlen>b->covlen);
+     }
+ }
+
+
+struct TRefOvl {
+	GffObj* ref;
+	char ovlcode;
+    byte rank;
+    int ovlen;
+    int16_t numExons; //number of exons in the query mRNA
+    int16_t numJmatch; //number of matching junctions in this overlap
+
+    bool operator<(TRefOvl& b) { //lower = higher priority
+		if (rank==b.rank && b.ref!=NULL && ref!=NULL) {
+			if (numExons==1 && b.ref->exons.Count()!=ref->exons.Count()) {
+				if (ref->exons.Count()==1) return true; //SET match always has priority
+				else if (b.ref->exons.Count()==1) return false;
+			}
+			if (numExons>1 && b.numJmatch!=numJmatch) {
+				return (numJmatch > b.numJmatch);
+			}
+			return (ovlen==b.ovlen)? closerRef(ref, b.ref, numExons, rank) : (ovlen>b.ovlen);
+		}
+		else return rank<b.rank;
+	}
+    bool operator==(TRefOvl& b) {
+		return (rank==b.rank && ref==b.ref);
+	}
+
+	TRefOvl(GffObj* r=NULL, char code=0, int exonCount=0, int olen=0, int jmatch=0):ref(r),
+			ovlcode(code), ovlen(olen), numJmatch(jmatch) {
+    	if (exonCount>255) exonCount=255;
+    	numExons=exonCount;
+		rank=classcode_rank(code);
+	}
+};
+
+struct QJData {
+	GBitVec jmd; //bit array showing ref-matched junctions
+	GList<TRefOvl> refovls;
+	GffObj* t;
+	QJData():t(NULL) {}
+	QJData(GffObj& tr):jmd( (tr.exons.Count()-1)<<1 ), refovls(true,true,true),
+			t(&tr) { }
+	void add(GffObj* ref, TOvlData& od) {
+	    #ifndef NDEBUG
+		  if (jmd.size()!=od.jbits.size()) GError("Error: mismatching QJData bit vector size!\n");
+		#endif
+		jmd |= od.jbits;
+		int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
+		#ifndef NDEBUG
+		  if (idx<0) GError("Error: trying to add duplicate overlap of %s with !\n");
+		#endif
+	}
+};
+//queryID, chr:strand:exons, list of ovlcode|ref_transcripts|gene,
+//                num genes,  list of novel junctions
+
+void geneAdd(GVec<char*>& gset, char* g) {
+	for (int i=0;i<gset.Count();i++) {
+		if (strcmp(g, gset[i])==0) return;
+	}
+	gset.Add(g);
+
+}
+void printNJTab(FILE* f, QJData& d) {
+	if (d.refovls.Count()==0) return;
+	fprintf(f, "%s\t%s:%c", d.t->getID(), d.t->getRefName(), d.t->strand);
+	GVec<char*> genes; //gene IDs
+	for (int i=0;i<d.t->exons.Count();++i) {
+		char ch=i ? ',' : ':';
+		fprintf(f, "%c%d-%d", ch, d.t->exons[i]->start, d.t->exons[i]->end);
+	}
+	fprintf(f, "\t");
+	for (int i=0;i<d.refovls.Count();++i) {
+		char* g=d.refovls[i]->ref->getGeneID();
+		if (i) fprintf(f, ",");
+		fprintf(f, "%c|%s|", d.refovls[i]->ovlcode, d.refovls[i]->ref->getID());
+		if (g) {
+			geneAdd(genes, g);
+			fprintf(f, "%s", g);
+		} else fprintf(f, "_");
+	}
+	fprintf(f, "\t%d\t", genes.Count());
+	// now print novel junctions, in groups of 2 :nn|n.|.n
+	char jj[3]={'.','.','\0'};
+	bool printed=false;
+	for (uint i=0;i<d.jmd.size();i+=2) {
+		bool smatch=d.jmd[i];
+		bool ematch=d.jmd[i+1];
+		if (smatch && ematch) continue;
+		int ei = i>>1; // index of exon on the left
+		jj[0]= (smatch) ? '.' : 'n';
+		jj[1]= (ematch) ? '.' : 'n';
+		if (printed) fprintf(f, ",");
+		printed=true;
+		fprintf(f, "%d-%d:%s", d.t->exons[ei]->end+1, d.t->exons[ei+1]->start-1, jj);
+	}
+	fprintf(f, "\n");
+
+}
 
 int main(int argc, char* argv[]) {
 	GArgs args(argc, argv, "help;strict-match;show-cds;hTJSc:o:");
@@ -45,12 +166,9 @@ int main(int argc, char* argv[]) {
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
 	if (args.getOpt('T')) outTab=true;
-	if (args.getOpt('J')) {
-	    outTab_jmatch=true;
-	    outTab=true;
-	}
-	if (outTab && simpleOvl)
-		GError("%s\nError: options -S and -T are mutually exclusive!\n", USAGE);
+	if (args.getOpt('J')) novelJTab=true;
+	if ((int)outTab + (int)simpleOvl+(int)novelJTab > 1)
+		GError("%s\nError: options -T, -J and -S are mutually exclusive!\n", USAGE);
     const char* s=args.getOpt('c');
     if (s!=NULL) {
     	fltCodes=s;
@@ -125,7 +243,10 @@ int main(int argc, char* argv[]) {
 		else { sidx.cAdd(1); sidx.cAdd(2); }
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
+
 			if(enu->Count()>0) { //overlaps found
+				QJData* tjd=NULL;
+				if (novelJTab) tjd=new QJData(*t);
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
 					GffObj* r=(GffObj*)enu->Get(i);
@@ -145,10 +266,12 @@ int main(int argc, char* argv[]) {
 						//int xovlen=r->exonOverlapLen(*t);
 						//GMessage("DEBUG:: Exon overlap: %d (reported by getOvlData: %d)\n", xovlen, od.ovlen);
 						float rcov=(100.00*od.ovlen)/r->covlen;
-						fprintf(outFH, "%s\t%c\t%.1f\t%s", t->getID(), od.ovlcode, rcov, r->getID());
-						if (outTab_jmatch) fprintf(outFH, "\t%d", od.numJmatch);
-						fprintf(outFH, "\n");
-					} else { //full pseudo-FASTA output
+						fprintf(outFH, "%s\t%c\t%.1f\t%s\t%d\n", t->getID(), od.ovlcode,
+								rcov, r->getID(), od.numJmatch);
+					} else if (novelJTab) {
+						tjd->add(r, od);
+					}
+					else  { //full pseudo-FASTA output
 						if (!qprinted) {
 							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 							t->printExonList(outFH);
@@ -172,6 +295,10 @@ int main(int argc, char* argv[]) {
 				} //for each range overlap
 				if (simpleOvl && qprinted)
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
+				if (novelJTab) {
+					printNJTab(outFH, *tjd);
+					delete tjd;
+				}
 			} //has overlaps
 			delete enu;
 		}

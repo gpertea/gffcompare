@@ -336,7 +336,7 @@ public:
 
 	void addOvl(TOvlData& od, GffObj* target=NULL) {
 		//ovls.AddIfNew(new COvLink(code, target, ovlen));
-		ovls.AddIfNew(new COvLink(od.ovlcode,target, mrna->exons.Count(), od.ovlen, od.numJmatch));
+		ovls.AddIfNew(new COvLink(od.ovlcode, target, mrna->exons.Count(), od.ovlen, od.numJmatch));
 	}
 
 	void addOvl(char code, GffObj* target=NULL, int ovlen=0) {
