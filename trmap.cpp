@@ -151,6 +151,7 @@ void printNJTab(FILE* f, QJData& d) {
 		printed=true;
 		fprintf(f, "%d-%d:%s", d.t->exons[ei]->end+1, d.t->exons[ei+1]->start-1, jj);
 	}
+	if (!printed) fprintf(f, ".");
 	fprintf(f, "\n");
 
 }
