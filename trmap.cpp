@@ -145,8 +145,9 @@ void printNJTab(FILE* f, QJData& d) {
 		if (i) fprintf(f, ",");
 		fprintf(f, "%c|%s|", d.refovls[i]->ovlcode, d.refovls[i]->ref->getID());
 		if (g) {
-			geneAdd(genes, g);
 			fprintf(f, "%s", g);
+			if (d.refovls[i]->rank<CLASSCODE_OVL_RANK)
+			    geneAdd(genes, g); //only count actually overlapping genes
 		} else fprintf(f, "_");
 	}
 	fprintf(f, "\t%d\t", genes.Count());
