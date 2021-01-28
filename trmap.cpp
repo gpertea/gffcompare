@@ -44,8 +44,11 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
  if (a==NULL || b==NULL) return (a!=NULL);
  if (rank<CLASSCODE_OVL_RANK) {
 	 //significant intron/exon overlap -- all the 'j' codes, but includes 'e'
-	 if (a->exons.Count()!=b->exons.Count())
-		 return (abs(a->exons.Count()-numexons)<abs(b->exons.Count()-numexons));
+	 if (a->exons.Count()!=b->exons.Count()) {
+		 int ad=a->exons.Count()-numexons;
+		 int bd=b->exons.Count()-numexons;
+		 return (abs(ad)==abs(bd)) ? ad<bd : abs(ad) < abs(bd);
+	 }
  }
  if (a->exons.Count()!=b->exons.Count()) return (a->exons.Count()>b->exons.Count());
  if (a->hasCDS() && !b->hasCDS())
@@ -104,7 +107,15 @@ struct QJData {
 		jmd |= od.jbits;
 		int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
 		#ifndef NDEBUG
-		  if (idx<0) GError("Error: trying to add duplicate overlap of %s with !\n");
+		  if (idx<0) {
+			  GMessage("Error: trying to add duplicate overlap of ref %s with %s (code %c)!\n",
+					  ref->getID(), t->getID(), od.ovlcode);
+			  GMessage(" Existing ref overlaps:\n");
+			  for (int i=0;i<refovls.Count();i++) {
+				  GMessage("%c\t%s\n", refovls[i]->ovlcode, refovls[i]->ref->getID());
+			  }
+			  GError("exiting..\n");
+		  }
 		#endif
 	}
 };

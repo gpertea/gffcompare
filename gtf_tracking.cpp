@@ -30,8 +30,11 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
  if (a==NULL || b==NULL) return (a!=NULL);
  if (rank<CLASSCODE_OVL_RANK) {
 	 //significant intron/exon overlap -- all the 'j' codes, but includes 'e'
-	 if (a->exons.Count()!=b->exons.Count())
-		 return (abs(a->exons.Count()-numexons)<abs(b->exons.Count()-numexons));
+	 if (a->exons.Count()!=b->exons.Count()) {
+		 int ad=a->exons.Count()-numexons;
+		 int bd=b->exons.Count()-numexons;
+		 return (abs(ad)==abs(bd)) ? ad<bd : abs(ad) < abs(bd);
+	 }
  }
  if (a->exons.Count()!=b->exons.Count()) return (a->exons.Count()>b->exons.Count());
  if (a->hasCDS() && !b->hasCDS())
