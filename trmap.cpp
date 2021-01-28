@@ -55,7 +55,8 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
         return true;
    else {
      if (b->hasCDS() && !a->hasCDS()) return false;
-     return (a->covlen>b->covlen);
+     return (a->covlen==b->covlen) ? (strcmp(a->getID(), b->getID())<0) :
+    		 (a->covlen>b->covlen);
      }
  }
 
@@ -108,8 +109,9 @@ struct QJData {
 		int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
 		#ifndef NDEBUG
 		  if (idx<0) {
-			  GMessage("Error: trying to add duplicate overlap of ref %s with %s (code %c)!\n",
-					  ref->getID(), t->getID(), od.ovlcode);
+			  refovls.Found(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch), idx);
+			  GMessage("Error: %s trying to add duplicate overlap of ref %s (previously found as %s)!\n",
+					  t->getID(), ref->getID(), refovls[idx]->ref->getID() );
 			  GMessage(" Existing ref overlaps:\n");
 			  for (int i=0;i<refovls.Count();i++) {
 				  GMessage("%c\t%s\n", refovls[i]->ovlcode, refovls[i]->ref->getID());

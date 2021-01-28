@@ -41,7 +41,8 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
         return true;
    else {
      if (b->hasCDS() && !a->hasCDS()) return false;
-     return (a->covlen>b->covlen);
+     return (a->covlen==b->covlen) ? (strcmp(a->getID(), b->getID())<0) :
+    		 (a->covlen>b->covlen);
      }
  }
 
