@@ -4,7 +4,7 @@
 #include "GBitVec.h"
 #include "GIntervalTree.h"
 
-#define VERSION "0.12.5"
+#define VERSION "0.12.2"
 
 bool simpleOvl=false;
 bool stricterMatching=false;
