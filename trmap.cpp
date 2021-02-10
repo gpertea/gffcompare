@@ -132,14 +132,29 @@ void geneAdd(GVec<char*>& gset, char* g) {
 
 }
 void printNJTab(FILE* f, QJData& d) {
-	if (d.refovls.Count()==0) return;
 	fprintf(f, "%s\t%s:%c", d.t->getID(), d.t->getRefName(), d.t->strand);
-	GVec<char*> genes; //gene IDs
 	for (int i=0;i<d.t->exons.Count();++i) {
 		char ch=i ? ',' : ':';
 		fprintf(f, "%c%d-%d", ch, d.t->exons[i]->start, d.t->exons[i]->end);
 	}
+
 	fprintf(f, "\t");
+
+	if (d.refovls.Count()==0) { //no ref range overlaps found
+		const char* code=d.t->getAttr("class_code"); //preserve u,p,r info
+		if (code==NULL) code=".";
+		fprintf(f,"%s\t",code);
+		if (d.t->exons.Count()<=1) fprintf(f, ".");
+		else for (int i=1;i<d.t->exons.Count();i++) {
+			   //every junction is going to be novel:
+			   if (i>1) fprintf(f, ",");
+			   fprintf(f, "%d-%d:nn", d.t->exons[i-1]->end+1, d.t->exons[i]->start-1);
+			 }
+		fprintf(f, "\n");
+		return;
+	}
+
+	GVec<char*> genes; //gene IDs
 	for (int i=0;i<d.refovls.Count();++i) {
 		char* g=d.refovls[i]->ref->getGeneID();
 		if (i) fprintf(f, ",");
@@ -239,6 +254,7 @@ int main(int argc, char* argv[]) {
 		fext=getFileExt(q_file);
 	}
 	GffReader* myQ = new GffReader(fq, true, true);
+	if (novelJTab) myQ->keepAttrs();
 	if (fext && Gstricmp(fext, "bed")==0) myQ->isBED();
 	t=NULL;
 	while ((t=myQ->readNext())!=NULL) {
@@ -258,10 +274,9 @@ int main(int argc, char* argv[]) {
 		else { sidx.cAdd(1); sidx.cAdd(2); }
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
-
+			QJData* tjd=NULL;
+			if (novelJTab) tjd=new QJData(*t);
 			if(enu->Count()>0) { //overlaps found
-				QJData* tjd=NULL;
-				if (novelJTab) tjd=new QJData(*t);
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
 					GffObj* r=(GffObj*)enu->Get(i);
@@ -310,13 +325,13 @@ int main(int argc, char* argv[]) {
 				} //for each range overlap
 				if (simpleOvl && qprinted)
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
-				if (novelJTab) {
-					printNJTab(outFH, *tjd);
-					delete tjd;
-				}
 			} //has overlaps
+			if (novelJTab) {
+				printNJTab(outFH, *tjd);
+				delete tjd;
+			}
 			delete enu;
-		}
+		} //for each searchable strand
 		delete t;
 	}
 	delete myQ;
