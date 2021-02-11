@@ -31,9 +31,9 @@ const char* USAGE =
 "  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
 "  -T           output a 5 column table: \n"
 "                 queryID, ovl_code, ref_cov%, refID, matched junctions\n"
-"  -J           for each query transcripts, output an 5 column table\n"
+"  -J           for each query transcripts, output an 6 column table\n"
 "                queryID, chr:strand:exons, list of reference transcripts,\n"
-"                num ref genes, list of novel junctions\n"
+"                num ref genes, list of gene names, list of novel junctions\n"
 "  -S           report only simple exon overlap percentages with reference\n"
 "               transcripts, without classification (one line per query)\n";
 
@@ -156,7 +156,8 @@ void printNJTab(FILE* f, QJData& d) {
 
 	GVec<char*> genes; //gene IDs
 	for (int i=0;i<d.refovls.Count();++i) {
-		char* g=d.refovls[i]->ref->getGeneID();
+		char* g=d.refovls[i]->ref->getGeneName();
+		if (g==NULL) g=d.refovls[i]->ref->getGeneID();
 		if (i) fprintf(f, ",");
 		fprintf(f, "%c|%s|", d.refovls[i]->ovlcode, d.refovls[i]->ref->getID());
 		if (g) {
@@ -165,7 +166,16 @@ void printNJTab(FILE* f, QJData& d) {
 			    geneAdd(genes, g); //only count actually overlapping genes
 		} else fprintf(f, "_");
 	}
-	fprintf(f, "\t%d\t", genes.Count());
+	//fprintf(f, "\t%d\t", genes.Count());
+	fprintf(f, "\t");
+	//print list of gene names if possible
+	if (genes.Count()==0) fprintf(f, ".");
+	else
+		for (int i=0;i<genes.Count();i++) {
+			if (i) fprintf(f, ",");
+			fprintf(f, "%s", genes[i]);
+		}
+	fprintf(f, "\t");
 	// now print novel junctions, in groups of 2 :nn|n.|.n
 	char jj[3]={'.','.','\0'};
 	bool printed=false;
