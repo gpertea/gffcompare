@@ -281,23 +281,26 @@ int main(int argc, char* argv[]) {
 		GSTree* cTree=map_trees[gseq];
 		sidx.cAdd(0); //always attempt to search the '.' strand
 		if (novelJTab) {
-			sidx.cAdd(1); sidx.cAdd(2);
+			if (t->strand=='+') { sidx.cAdd(1); sidx.cAdd(2); }
+			else { sidx.cAdd(2); sidx.cAdd(1); }
 		} else {
 		  if (t->strand=='+') sidx.cAdd(1);
 		   else if (t->strand=='-') sidx.cAdd(2);
 		   else { sidx.cAdd(1); sidx.cAdd(2); }
 		}
 		QJData* tjd=NULL;
-		bool jfound=false;
+		//bool jfound=false;
+		if (novelJTab) tjd=new QJData(*t);
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = cTree->it[sidx[k]].Enumerate(t->start, t->end);
-			if (novelJTab && tjd==NULL) tjd=new QJData(*t);
 			if(enu->Count()>0) { //overlaps found
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
 					GffObj* r=(GffObj*)enu->Get(i);
 					TOvlData od=getOvlData(*t, *r, stricterMatching);
 					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
+						continue;
+					if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
 						continue;
 					if (simpleOvl) {
 						if (od.ovlen==0) continue;
@@ -342,18 +345,19 @@ int main(int argc, char* argv[]) {
 				if (simpleOvl && qprinted)
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
 			} //has overlaps
-			if (novelJTab) {
+			/*if (novelJTab) {
 				if (tjd->refovls.Count()>0) {
-					printNJTab(outFH, *tjd);
+					if (!jfound) printNJTab(outFH, *tjd);
 				    jfound=true;
 					delete tjd;
 					tjd=NULL;
 				}
 			}
+			*/
 			delete enu;
 		} //for each searchable strand
 		if (novelJTab && tjd) {
-			if (!jfound) printNJTab(outFH, *tjd);
+			printNJTab(outFH, *tjd);
 			delete tjd;
 		}
 		delete t;
