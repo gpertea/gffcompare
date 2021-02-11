@@ -268,14 +268,16 @@ int main(int argc, char* argv[]) {
 			continue; //only work with properly defined transcripts
 		}
 		GVec<int> sidx;
-		sidx.cAdd(0); //always search the '.' strand
+		GSTree* cTree=map_trees[gseq];
+		sidx.cAdd(0); //always attempt to search the '.' strand
 		if (t->strand=='+') sidx.cAdd(1);
 		else if (t->strand=='-') sidx.cAdd(2);
 		else { sidx.cAdd(1); sidx.cAdd(2); }
+		QJData* tjd=NULL;
+		bool jfound=false;
 		for (int k=0;k<sidx.Count();++k) {
-			GVec<GSeg*> *enu = map_trees[gseq]->it[sidx[k]].Enumerate(t->start, t->end);
-			QJData* tjd=NULL;
-			if (novelJTab) tjd=new QJData(*t);
+			GVec<GSeg*> *enu = cTree->it[sidx[k]].Enumerate(t->start, t->end);
+			if (novelJTab && tjd==NULL) tjd=new QJData(*t);
 			if(enu->Count()>0) { //overlaps found
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
@@ -327,11 +329,19 @@ int main(int argc, char* argv[]) {
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
 			} //has overlaps
 			if (novelJTab) {
-				printNJTab(outFH, *tjd);
-				delete tjd;
+				if (tjd->refovls.Count()>0) {
+					printNJTab(outFH, *tjd);
+				    jfound=true;
+					delete tjd;
+					tjd=NULL;
+				}
 			}
 			delete enu;
 		} //for each searchable strand
+		if (novelJTab && tjd) {
+			if (!jfound) printNJTab(outFH, *tjd);
+			delete tjd;
+		}
 		delete t;
 	}
 	delete myQ;
