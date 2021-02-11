@@ -280,9 +280,13 @@ int main(int argc, char* argv[]) {
 		GVec<int> sidx;
 		GSTree* cTree=map_trees[gseq];
 		sidx.cAdd(0); //always attempt to search the '.' strand
-		if (t->strand=='+') sidx.cAdd(1);
-		else if (t->strand=='-') sidx.cAdd(2);
-		else { sidx.cAdd(1); sidx.cAdd(2); }
+		if (novelJTab) {
+			sidx.cAdd(1); sidx.cAdd(2);
+		} else {
+		  if (t->strand=='+') sidx.cAdd(1);
+		   else if (t->strand=='-') sidx.cAdd(2);
+		   else { sidx.cAdd(1); sidx.cAdd(2); }
+		}
 		QJData* tjd=NULL;
 		bool jfound=false;
 		for (int k=0;k<sidx.Count();++k) {
