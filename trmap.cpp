@@ -143,7 +143,7 @@ void printNJTab(FILE* f, QJData& d) {
 	if (d.refovls.Count()==0) { //no ref range overlaps found
 		const char* code=d.t->getAttr("class_code"); //preserve u,p,r info
 		if (code==NULL) code=".";
-		fprintf(f,"%s\t",code);
+		fprintf(f,"%s\t.\t",code);
 		if (d.t->exons.Count()<=1) fprintf(f, ".");
 		else for (int i=1;i<d.t->exons.Count();i++) {
 			   //every junction is going to be novel:
@@ -164,7 +164,7 @@ void printNJTab(FILE* f, QJData& d) {
 			fprintf(f, "%s", g);
 			if (d.refovls[i]->rank<CLASSCODE_OVL_RANK)
 			    geneAdd(genes, g); //only count actually overlapping genes
-		} else fprintf(f, "_");
+		} else fprintf(f, ".");
 	}
 	//fprintf(f, "\t%d\t", genes.Count());
 	fprintf(f, "\t");
