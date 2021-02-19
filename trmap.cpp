@@ -31,10 +31,10 @@ const char* USAGE =
 "  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
 "  -T           output a 5 column table: \n"
 "                 queryID, ovl_code, ref_cov%, refID, matched junctions\n"
-"  -J           for each query transcripts, output an 6 column table\n"
-"                queryID, chr:strand:exons, list of reference transcripts,\n"
-"                num ref genes, list of gene names, list of novel junctions\n"
-"  -S           report only simple exon overlap percentages with reference\n"
+"  -J           for each query transcript output a 6 column table\n"
+"                 queryID, chr:strand:exons, list of reference transcripts,\n"
+"                 num ref genes, list of gene names, list of novel junctions\n"
+"  -S           report only simple exon overlap percentage with the reference\n"
 "               transcripts, without classification (one line per query)\n";
 
 bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
