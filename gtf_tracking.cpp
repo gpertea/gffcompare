@@ -356,14 +356,14 @@ int parse_mRNAs(GfList& mrnas,
 				 total_kept--;
 				 if (betterTDup(rp, m)) {
 					if (debug)
-					   GMessage("\tQuery transcript %s discarded (duplicate of %s)\n",
-					      m->getID(), rp->getID() );
+					   GMessage("\tQuery transcript %s discarded (duplicate of %s) (%d exons)\n",
+					      m->getID(), rp->getID(), rp->exons.Count() );
 					continue;
 				 }
 				 else {
 					if (debug)
-					   GMessage("\tQuery transcript %s discarded (duplicate of %s)\n",
-					      rp->getID(), m->getID() );
+					   GMessage("\tQuery transcript %s discarded (duplicate of %s) (%d exons)\n",
+					      rp->getID(), m->getID(), rp->exons.Count() );
 					 ((CTData*)(rp->uptr))->mrna=NULL;
 					 rp->isUsed(false);
 					 target_mrnas->Forget(rpidx);
