@@ -2,7 +2,7 @@
 #include "gff.h"
 #include "GStr.h"
 #include "GBitVec.h"
-#include "GIntervalTree.h"
+#include "GIntervalTree.hh"
 
 #define VERSION "0.12.2"
 

@@ -67,7 +67,7 @@ ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 gffcompare: ${OBJS} ./gtf_tracking.o ./gffcompare.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
-trmap: ${OBJS} ./GIntervalTree.o ./trmap.o
+trmap: ${OBJS} ./trmap.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
 .PHONY : clean
