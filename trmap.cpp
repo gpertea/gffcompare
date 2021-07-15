@@ -3,8 +3,9 @@
 #include "GStr.h"
 #include "GBitVec.h"
 #include "GIntervalTree.hh"
+//#include "GAIList.hh"
 
-#define VERSION "0.12.2"
+#define VERSION "0.13"
 
 bool simpleOvl=false;
 bool stricterMatching=false;
