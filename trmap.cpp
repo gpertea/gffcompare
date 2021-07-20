@@ -14,9 +14,9 @@ bool outTab=false;
 bool novelJTab=false;
 GStr fltCodes;
 
-struct GSTree {
+/*struct GSTree {
 	GIntervalTree it[3]; //0=unstranded, 1: +strand, 2: -strand
-};
+};*/
 
 const char* USAGE =
 "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
@@ -214,7 +214,8 @@ int main(int argc, char* argv[]) {
     if (s!=NULL) {
     	fltCodes=s;
     }
-	GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
+	//GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
+	GHash<GIntervalTree*> map_trees; //chr -> Interval Tree
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
 
@@ -236,16 +237,21 @@ int main(int argc, char* argv[]) {
 			delete t;
 			continue; //skip exonless entities (e.g. genes)
 		}
-		GSTree* cTree=map_trees[t->getGSeqName()];
+		//GSTree* cTree=map_trees[t->getGSeqName()];
+		GIntervalTree* cTree=map_trees[t->getGSeqName()];
 		if (cTree==NULL) {
-			cTree=new GSTree();
+			//cTree=new GSTree();
+			cTree=new GIntervalTree();
 			map_trees.Add(t->getGSeqName(), cTree);
 		}
+		/*
 		if (t->strand=='+')
 		 cTree->it[1].Insert(t);
 		else if (t->strand=='-')
 			cTree->it[2].Insert(t);
 		else cTree->it[0].Insert(t);
+		*/
+	    cTree->Insert(t);
 		toFree->Add(t);
 	}
 	delete myR;
@@ -272,12 +278,13 @@ int main(int argc, char* argv[]) {
 		const char* gseq=t->getGSeqName();
 		if (!map_trees.hasKey(gseq)) {
 			delete t;
-			continue; //reference sequence not present in annotation, so we can't compare
+			continue; //reference sequence not present in annotation, nothing to do
 		}
 		if (t->exons.Count()==0) {
 			delete t;
 			continue; //only work with properly defined transcripts
 		}
+		/*
 		GVec<int> sidx;
 		GSTree* cTree=map_trees[gseq];
 		sidx.cAdd(0); //always attempt to search the '.' strand
@@ -289,11 +296,15 @@ int main(int argc, char* argv[]) {
 		   else if (t->strand=='-') sidx.cAdd(2);
 		   else { sidx.cAdd(1); sidx.cAdd(2); }
 		}
+		*/
+	
+        GIntervalTree* cTree = map_trees[gseq];
+
 		QJData* tjd=NULL;
-		//bool jfound=false;
+		// bool jfound=false;
 		if (novelJTab) tjd=new QJData(*t);
-		for (int k=0;k<sidx.Count();++k) {
-			GVec<GSeg*> *enu = cTree->it[sidx[k]].Enumerate(t->start, t->end);
+		//for (int k=0;k<sidx.Count();++k) {
+			GVec<GSeg*> *enu = cTree->Enumerate(t->start, t->end);
 			if(enu->Count()>0) { //overlaps found
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
@@ -356,7 +367,7 @@ int main(int argc, char* argv[]) {
 			}
 			*/
 			delete enu;
-		} //for each searchable strand
+		//} //for each searchable strand
 		if (novelJTab && tjd) {
 			printNJTab(outFH, *tjd);
 			delete tjd;
