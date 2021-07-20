@@ -309,11 +309,12 @@ int main(int argc, char* argv[]) {
 				bool qprinted=false;
 				for (int i=0; i<enu->Count(); ++i) {
 					GffObj* r=(GffObj*)enu->Get(i);
+					if (t->strand!=r->strand && t->strand!='.' && r->strand!='.') continue;
 					TOvlData od=getOvlData(*t, *r, stricterMatching);
 					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
 						continue;
-					if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
-						continue;
+					//if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
+					//	continue;
 					if (simpleOvl) {
 						if (od.ovlen==0) continue;
 						float rcov=(100.00*od.ovlen)/r->covlen;
