@@ -313,8 +313,6 @@ int main(int argc, char* argv[]) {
 					TOvlData od=getOvlData(*t, *r, stricterMatching);
 					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
 						continue;
-					//if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
-					//	continue;
 					if (simpleOvl) {
 						if (od.ovlen==0) continue;
 						float rcov=(100.00*od.ovlen)/r->covlen;
@@ -358,15 +356,6 @@ int main(int argc, char* argv[]) {
 				if (simpleOvl && qprinted)
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
 			} //has overlaps
-			/*if (novelJTab) {
-				if (tjd->refovls.Count()>0) {
-					if (!jfound) printNJTab(outFH, *tjd);
-				    jfound=true;
-					delete tjd;
-					tjd=NULL;
-				}
-			}
-			*/
 			delete enu;
 		//} //for each searchable strand
 		if (novelJTab && tjd) {
