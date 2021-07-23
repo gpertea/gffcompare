@@ -2,7 +2,7 @@ GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
 
 INCDIRS := -I${GCLIB}
 
-BASEFLAGS  = -Wall -Wextra ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
+BASEFLAGS  = -Wall -Wextra -std=c++11 ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
 
 CXX   := $(if $(CXX),$(CXX),g++)
 LINKER  := $(if $(LINKER),$(LINKER),g++)
@@ -22,9 +22,9 @@ ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
   ifneq (,$(findstring static,$(MAKECMDGOALS)))
     LDFLAGS += -static-libstdc++ -static-libgcc
   endif
-  CXXFLAGS := -O3 -DNDEBUG -std=c++11 $(CXXFLAGS)
+  CXXFLAGS := -O3 -DNDEBUG $(CXXFLAGS)
 else # debug build
-  CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG -std=c++11
+  CXXFLAGS += -g -O0 -DDEBUG -D_DEBUG -DGDEBUG
   ifneq (,$(filter %memcheck %memdebug, $(MAKECMDGOALS)))
      #make memcheck : use the statically linked address sanitizer in gcc 4.9.x
      GCCVER49 := $(shell expr `${CXX} -dumpversion | cut -f1,2 -d.` \>= 4.9)
