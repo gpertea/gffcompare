@@ -51,8 +51,7 @@ endif
 # C/C++ linker
 
 OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
- ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
- ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
+ ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o ${GCLIB}/GArgs.o
 
 .PHONY : all
 all debug release static memcheck memdebug : ../gclib gffcompare trmap

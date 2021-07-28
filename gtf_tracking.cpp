@@ -269,10 +269,6 @@ int parse_mRNAs(GfList& mrnas,
 		if (only_multiexon && m->exons.Count()<2) {
 			continue;
 			}
-		//GStr feature(m->getFeatureName());
-		//feature.lower();
-		//bool gene_or_locus=(feature.endsWith("gene") ||feature.index("loc")>=0);
-		//if (m->exons.Count()==0 && gene_or_locus) {
 		if (m->isDiscarded()) {
 			//discard generic "gene" or "locus" features with no other detailed subfeatures
 			if (!is_ref_set && gtf_tracking_verbose)
@@ -758,13 +754,13 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
 	int oriented_by_overlap=0;
 	int initial_unoriented=0;
 	int final_unoriented=0;
-	GStr bname(fname);
-	GStr s;
+	Gcstr bname(fname);
+	Gcstr s;
 	if (!bname.is_empty()) {
 		int di=bname.rindex('.');
 		if (di>0) bname.cut(di);
 		int p=bname.rindex('/');
-		if (p<0) p=bname.rindex('\\');
+		//if (p<0) p=bname.rindex('\\');
 		if (p>=0) bname.remove(0,p);
 	}
 	FILE* fdis=NULL;

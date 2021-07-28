@@ -11,7 +11,6 @@
 
 #include "gff.h"
 #include "GFaSeqGet.h"
-#include "GStr.h"
 
 extern int numQryFiles;
 extern bool gtf_tracking_verbose;
@@ -43,10 +42,10 @@ class GFastaHandler {
   GFastaIndex* faIdx;
   char* getFastaFile(int gseq_id) {
      if (fastaPath==NULL) return NULL;
-     GStr s(fastaPath);
-     s.trimR('/');
-     s.appendfmt("/%s",getGSeqName(gseq_id));
-     GStr sbase(s);
+     Gcstr s(fastaPath);
+     s.chomp('/');
+     s+='/';s+=getGSeqName(gseq_id);
+     Gcstr sbase(s);
      if (!fileExists(s.chars())) s.append(".fa");
      if (!fileExists(s.chars())) s.append("sta");
      if (fileExists(s.chars())) return Gstrdup(s.chars());
@@ -69,7 +68,7 @@ class GFastaHandler {
      fastaPath=Gstrdup(fpath);
      if (fastaPath!=NULL) {
          if (fileExists(fastaPath)>1) { //exists and it's not a directory
-            GStr fainame(fastaPath);
+            Gcstr fainame(fastaPath);
             //the .fai name might have been given directly
             if (fainame.rindex(".fai")==fainame.length()-4) {
                //.fai index file given directly
@@ -80,7 +79,7 @@ class GFastaHandler {
               else fainame.append(".fai");
             //fainame.append(".fai");
             faIdx=new GFastaIndex(fastaPath,fainame.chars());
-            GStr fainamecwd(fainame);
+            Gcstr fainamecwd(fainame);
             int ip=-1;
             if ((ip=fainamecwd.rindex('/'))>=0)
                fainamecwd.cut(0,ip+1);

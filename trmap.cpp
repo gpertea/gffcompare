@@ -1,9 +1,8 @@
 #include "GArgs.h"
 #include "gff.h"
-#include "GStr.h"
 #include "GBitVec.h"
-#include "GIntervalTree.hh"
-//#include "GAIList.hh"
+//#include "GIntervalTree.hh"
+#include "GAIList.hh"
 
 #define VERSION "0.13"
 
@@ -12,7 +11,7 @@ bool stricterMatching=false;
 bool showCDS=false;
 bool outTab=false;
 bool novelJTab=false;
-GStr fltCodes;
+Gcstr fltCodes;
 
 /*struct GSTree {
 	GIntervalTree it[3]; //0=unstranded, 1: +strand, 2: -strand
@@ -107,8 +106,8 @@ struct QJData {
 		  if (jmd.size()!=od.jbits.size()) GError("Error: mismatching QJData bit vector size!\n");
 		#endif
 		jmd |= od.jbits;
-		int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
 		#ifndef NDEBUG
+		  int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
 		  if (idx<0) {
 			  refovls.Found(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch), idx);
 			  GMessage("Error: %s trying to add duplicate overlap of ref %s (previously found as %s)!\n",
@@ -119,6 +118,8 @@ struct QJData {
 			  }
 			  GError("exiting..\n");
 		  }
+		#else
+		  refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch)); 
 		#endif
 	}
 };
@@ -203,7 +204,8 @@ int main(int argc, char* argv[]) {
 		GMessage(USAGE);
 		exit(EXIT_SUCCESS);
 	}
-	if (args.getOpt('S')) simpleOvl=true;
+
+    if (args.getOpt('S')) simpleOvl=true;
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
 	if (args.getOpt('T')) outTab=true;
@@ -214,8 +216,9 @@ int main(int argc, char* argv[]) {
     if (s!=NULL) {
     	fltCodes=s;
     }
-	//GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
-	GHash<GIntervalTree*> map_trees; //chr -> Interval Tree
+	//GHash<GIntervalTree*> map_trees; //chr -> Interval Tree
+
+	GAIListSet<GffObj*> map_trees(true); //don't copy/manage chr names
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
 
@@ -237,24 +240,20 @@ int main(int argc, char* argv[]) {
 			delete t;
 			continue; //skip exonless entities (e.g. genes)
 		}
-		//GSTree* cTree=map_trees[t->getGSeqName()];
+		/*
 		GIntervalTree* cTree=map_trees[t->getGSeqName()];
 		if (cTree==NULL) {
-			//cTree=new GSTree();
 			cTree=new GIntervalTree();
 			map_trees.Add(t->getGSeqName(), cTree);
 		}
-		/*
-		if (t->strand=='+')
-		 cTree->it[1].Insert(t);
-		else if (t->strand=='-')
-			cTree->it[2].Insert(t);
-		else cTree->it[0].Insert(t);
-		*/
 	    cTree->Insert(t);
+		*/
+		map_trees.add(t->getGSeqName(), t->start, t->end, t);
 		toFree->Add(t);
 	}
 	delete myR;
+	// freeze build the GAIListSet
+	map_trees.build();
 	FILE* outFH=NULL;
 	if (strcmp(o_file, "-")==0) outFH=stdout;
 	            else {
@@ -276,6 +275,7 @@ int main(int argc, char* argv[]) {
 	t=NULL;
 	while ((t=myQ->readNext())!=NULL) {
 		const char* gseq=t->getGSeqName();
+		/*
 		if (!map_trees.hasKey(gseq)) {
 			delete t;
 			continue; //reference sequence not present in annotation, nothing to do
@@ -284,31 +284,25 @@ int main(int argc, char* argv[]) {
 			delete t;
 			continue; //only work with properly defined transcripts
 		}
-		/*
-		GVec<int> sidx;
-		GSTree* cTree=map_trees[gseq];
-		sidx.cAdd(0); //always attempt to search the '.' strand
-		if (novelJTab) {
-			if (t->strand=='+') { sidx.cAdd(1); sidx.cAdd(2); }
-			else { sidx.cAdd(2); sidx.cAdd(1); }
-		} else {
-		  if (t->strand=='+') sidx.cAdd(1);
-		   else if (t->strand=='-') sidx.cAdd(2);
-		   else { sidx.cAdd(1); sidx.cAdd(2); }
-		}
-		*/
 	
-        GIntervalTree* cTree = map_trees[gseq];
-
+        //GIntervalTree* cTree = map_trees[gseq];
+		*/
+	    uint hitCount=map_trees.query(gseq, t->start, t->end);
+		if (hitCount==0) {
+			delete t;
+			continue;
+		}
 		QJData* tjd=NULL;
 		// bool jfound=false;
 		if (novelJTab) tjd=new QJData(*t);
 		//for (int k=0;k<sidx.Count();++k) {
-			GVec<GSeg*> *enu = cTree->Enumerate(t->start, t->end);
-			if(enu->Count()>0) { //overlaps found
+			//GVec<GSeg*> *enu = cTree->Enumerate(t->start, t->end);
+			//if(enu->Count()>0) { //overlaps found
 				bool qprinted=false;
-				for (int i=0; i<enu->Count(); ++i) {
-					GffObj* r=(GffObj*)enu->Get(i);
+				//for (int i=0; i<enu->Count(); ++i) {
+					//GffObj* r=(GffObj*)enu->Get(i);
+				for (uint i=0; i<hitCount; ++i) {
+					GffObj* r=map_trees.hitData(i);
 					if (t->strand!=r->strand && t->strand!='.' && r->strand!='.') continue;
 					TOvlData od=getOvlData(*t, *r, stricterMatching);
 					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
@@ -355,9 +349,9 @@ int main(int argc, char* argv[]) {
 				} //for each range overlap
 				if (simpleOvl && qprinted)
 					fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
-			} //has overlaps
-			delete enu;
-		//} //for each searchable strand
+			//} //has overlaps
+			//delete enu;
+		//} //for each hit
 		if (novelJTab && tjd) {
 			printNJTab(outFH, *tjd);
 			delete tjd;

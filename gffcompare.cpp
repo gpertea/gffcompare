@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include "gtf_tracking.h"
+#include "GStr.h"
 
 #define VERSION "0.13"
 
@@ -117,7 +118,7 @@ bool qDupDiscard=false;
 bool only_spliced_refs=false;
 int debugCounter=0;
 bool gffAnnotate=false;
-GStr consGTF;
+Gcstr consGTF;
 int outConsCount=0;
 int polyrun_range=2000; //polymerase run range 2KB
 double scoreThreshold=0;
@@ -136,7 +137,7 @@ uint exonEndRange=100; // -e value, only used for exon level Sn/Sp
 int total_xloci_alt=0;
 
 void openfwrite(FILE* &f, GArgs& args, char opt) {
-  GStr s=args.getOpt(opt);
+  Gcstr s=args.getOpt(opt);
   if (!s.is_empty()) {
       if (s=='-')
        f=stdout;
@@ -195,7 +196,7 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
        GSeqData* seqdata=NULL, GSeqData* refdata=NULL, int qfidx=-1);
 
 GSeqData* getQryData(int gid, GList<GSeqData>& qdata);
-void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** ftr, FILE** frs);
+void trackGData(int qcount, GList<GSeqTrack>& gtracks, Gcstr& fbasename, FILE** ftr, FILE** frs);
 
 #define FWCLOSE(fh) if (fh!=NULL && fh!=stdout) fclose(fh)
 #define FRCLOSE(fh) if (fh!=NULL && fh!=stdin) fclose(fh)
@@ -208,10 +209,10 @@ FILE* f_nj=NULL; //-j novel junctions output file
 bool multiexon_only=false;
 bool multiexonrefs_only=false;
 
-GHash<GStr*> refdescr;
+GHash<Gcstr*> refdescr;
 void loadRefDescr(const char* fname);
 
-GList<GStr> qryfiles(false,true,false);
+GList<Gcstr> qryfiles(false,true,false);
 
 //list of GSeqTrack data, sorted by gseq_id
 GList<GSeqTrack> gseqtracks(true,true,true);
@@ -289,7 +290,7 @@ int main(int argc, char* argv[]) {
   checkFasta=(args.getOpt('J')!=NULL);
   gtf_tracking_verbose=((args.getOpt('V')!=NULL) || debug);
   FILE* finlst=NULL;
-  GStr s=args.getOpt('i');
+  Gcstr s=args.getOpt('i');
   if (!s.is_empty()) {
 	  if (s=='-')
 		  finlst=stdin;
@@ -305,7 +306,7 @@ int main(int argc, char* argv[]) {
 	  while ((l=lr->getLine())!=NULL) {
 		  if (strlen(l)<2 || startsWith(l,"# ") || isspace(*l)) continue;
 		  if (!fileExists(l)) GError("Error: cannot locate input file: %s\n", l);
-		  qryfiles.Add(new GStr(l));
+		  qryfiles.Add(new Gcstr(l));
 	  }
 	  delete lr;
 	  //if (qryfiles.Count()>10)
@@ -322,7 +323,7 @@ int main(int argc, char* argv[]) {
 		  }
 		  while ((infile=args.nextNonOpt())!=NULL) {
 			  if (!fileExists(infile)) GError("Error: cannot locate input file: %s\n", infile);
-			  qryfiles.Add(new GStr(infile));
+			  qryfiles.Add(new Gcstr(infile));
 		  } //for each argument
 	  }
   }
@@ -355,14 +356,14 @@ int main(int argc, char* argv[]) {
   //if a full pathname is given
   //the other common output files will still be created in the current directory:
   // .loci, .tracking, .stats
-  GStr outbasename; //include path, if provided
-  GStr outprefix; //without path and/or extension
-  GStr outstats=args.getOpt('o');
+  Gcstr outbasename; //include path, if provided
+  Gcstr outprefix; //without path and/or extension
+  Gcstr outstats=args.getOpt('o');
   if (outstats.is_empty() || outstats=="-") {
        outstats="gffcmp";
        }
   outbasename=outstats;
-  GStr outext(getFileExt(outstats.chars()));
+  Gcstr outext(getFileExt(outstats.chars()));
   if (outext.is_empty()) {
     outext="stats";
     outstats.append(".stats");
@@ -445,7 +446,7 @@ int main(int argc, char* argv[]) {
         }
   }
 
-  f_out=fopen(outstats, "w");
+  f_out=fopen(outstats.chars(), "w");
   if (f_out==NULL) GError("Error creating output file %s!\n", outstats.chars());
   fprintf(f_out, "# gffcompare v%s | Command line was:\n#", VERSION);
   for (int i=0;i<argc-1;i++)
@@ -468,9 +469,9 @@ int main(int argc, char* argv[]) {
               else consGTF.append(".combined.gtf");
 
   for (int fi=0;fi<qryfiles.Count();fi++) {
-    GStr in_file(qryfiles[fi]->chars());
-    GStr infname(getFileName(qryfiles[fi]->chars())); //file name only
-    GStr indir(qryfiles[fi]->chars());
+    Gcstr in_file(qryfiles[fi]->chars());
+    Gcstr infname(getFileName(qryfiles[fi]->chars())); //file name only
+    Gcstr indir(qryfiles[fi]->chars());
     di=indir.rindex(CHPATHSEP);
     if (di>=0) indir.cut(di+1); //directory path for this input file
           else indir=""; //current directory
@@ -485,10 +486,10 @@ int main(int argc, char* argv[]) {
             GError("Cannot open input file %s!\n",in_file.chars());
         }
     //f_in is the query gff file to process
-    GStr sbase(indir);
-    sbase.append(outprefix);
+    Gcstr sbase(indir);
+    sbase.append(outprefix.chars());
     sbase.append(".");
-    sbase.append(infname);
+    sbase.append(infname.chars());
     if (tmapFiles) {
         //-- we should keep the infname path, otherwise the remaining file names
         //   may be the same and clobber each other
@@ -888,7 +889,7 @@ GSeqData* getQryData(int gid, GList<GSeqData>& qdata) {
 
 const char* findDescr(GffObj* gfobj) {
   if (refdescr.Count()==0) return NULL;
-  GStr* s=refdescr.Find(gfobj->getID());
+  Gcstr* s=refdescr.Find(gfobj->getID());
   if (s==NULL) {
        s=refdescr.Find(gfobj->getGeneName());
        if (s==NULL) s=refdescr.Find(gfobj->getGeneID());
@@ -1123,8 +1124,8 @@ int aa_diff(GXConsensus* c1, GXConsensus* c2) {
 }
 */
 void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
- GStr t_id, g_id, xloc;
- GStr gene_name(xc->tcons->getGeneName());//always preserve original gene_name if present
+ Gcstr t_id, g_id, xloc;
+ Gcstr gene_name(xc->tcons->getGeneName());//always preserve original gene_name if present
  if (gffAnnotate) {
 	 t_id=xc->tcons->getID();
 	 g_id=xc->tcons->getGeneID();
@@ -1139,8 +1140,8 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
    "%s\t%s\ttranscript\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\";"  ,
    xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->start, xc->tcons->end, xc->tcons->strand,
      t_id.chars(), g_id.chars());
- GStr ref_gene_name;
- GStr ref_gene_id;
+ Gcstr ref_gene_name;
+ Gcstr ref_gene_id;
  if (gene_name.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<15) {
 	//TODO: what if we want to override existing one?
     ref_gene_name=xc->ref->getGeneName();//get the gene name from this overlapping reference
@@ -1191,7 +1192,7 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
         fprintf(fc, " cmp_ref \"%s\";",xc->ref->getID());
     fprintf(fc, " class_code \"%c\";",xc->refcode ? xc->refcode : '.');
     if (xc->ref) {
-      GStr ref_gname(xc->ref->getGeneName());
+      Gcstr ref_gname(xc->ref->getGeneName());
       if (ref_gname.is_empty()) ref_gname=xc->ref->getGeneID();
       if (!ref_gname.is_empty() && ref_gname!=gene_name)
         fprintf(fc, " cmp_ref_gene \"%s\";",ref_gname.chars());
@@ -1751,7 +1752,7 @@ void loadRefDescr(const char* fname) {
    if (idlen<llen && idlen>0) {
      *p=0;
       p++;
-      refdescr.Add(line, new GStr(p));
+      refdescr.Add(line, new Gcstr(p));
       }
   }
 }
@@ -2528,8 +2529,8 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
     for (int r=0;r<rloci->Get(l)->mrnas.Count(); r++) {
       GffObj& ref = *(rloci->Get(l)->mrnas[r]);
       CTData* refdata = ((CTData*)ref.uptr);
-      GStr* clist = new GStr[qcount];
-      GStr* eqlist = new GStr[qcount];
+      Gcstr* clist = new Gcstr[qcount];
+      Gcstr* eqlist = new Gcstr[qcount];
       for (int i = 0; i<refdata->ovls.Count(); i++) {
         GffObj* m=refdata->ovls[i]->mrna;
         char ovlcode=refdata->ovls[i]->code;
@@ -2554,11 +2555,11 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
       }//for each reference overlap
       for (int q=0;q<qcount;q++) {
         if (!eqlist[q].is_empty()) {
-          eqlist[q].trimR(',');
+          eqlist[q].chomp(',');
           fprintf(frs[q],"%s\t%s\t=\t%s\n", getGeneNameID(ref), ref.getID(),eqlist[q].chars());
         }
         if (!clist[q].is_empty()) {
-          clist[q].trimR(',');
+          clist[q].chomp(',');
           fprintf(frs[q],"%s\t%s\tc\t%s\n",getGeneNameID(ref), ref.getID(),clist[q].chars());
         }
       }
@@ -2568,13 +2569,13 @@ void printRefMap(FILE** frs, int qcount, GList<GLocus>* rloci) {
   }//ref locus loop
 }
 
-void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** ftr, FILE** frs) {
+void trackGData(int qcount, GList<GSeqTrack>& gtracks, Gcstr& fbasename, FILE** ftr, FILE** frs) {
   FILE* f_ltrack=NULL;
   FILE* f_itrack=NULL;
   FILE* f_ctrack=NULL;
   FILE* f_xloci=NULL;
   int cnum=0; //consensus numbering for printITrack()
-  GStr s=fbasename;
+  Gcstr s=fbasename;
   //if (qcount>1 || generic_GFF) { //doesn't make much sense for only 1 query file
     s.append(".tracking");
     f_itrack=fopen(s.chars(),"w");
