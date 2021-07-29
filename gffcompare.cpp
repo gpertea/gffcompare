@@ -2,7 +2,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include "gtf_tracking.h"
-#include "GStr.h"
 
 #define VERSION "0.13"
 
@@ -139,7 +138,7 @@ int total_xloci_alt=0;
 void openfwrite(FILE* &f, GArgs& args, char opt) {
   Gcstr s=args.getOpt(opt);
   if (!s.is_empty()) {
-      if (s=='-')
+      if (s=="-" || s=="stdout")
        f=stdout;
       else {
        f=fopen(s,"w");
@@ -292,7 +291,7 @@ int main(int argc, char* argv[]) {
   FILE* finlst=NULL;
   Gcstr s=args.getOpt('i');
   if (!s.is_empty()) {
-	  if (s=='-')
+	  if (s=="-" || s=="stdin")
 		  finlst=stdin;
 	  else {
 		  finlst=fopen(s,"r");
