@@ -215,9 +215,8 @@ class GIArray:public GArray<GISeg> {
 class CEqList: public GList<GffObj> {
   public:
     GffObj* head;
-    CEqList():GList<GffObj>((GCompareProc*)cmpByPtr, (GFreeProc*)NULL, true) {
-      head=NULL;
-    }
+    CEqList():GList<GffObj>((GCompareProc*)cmpByPtr, (GFreeProc*)NULL, true),
+    		head(NULL) { }
 };
 
 class CTData { //transcript associated data
@@ -1099,14 +1098,15 @@ class GXConsensus:public GSeg {
    int aalen;
    GXConsensus* contained; //if contained into another GXConsensus
    //list of ichain-matching query transcripts that contributed to this consensus
-   GList<GffObj> qchain;
+   //GList<GffObj> qchain;
+   int qcount;
    GXConsensus(GffObj* c, CEqList* qlst, GffObj* r=NULL, char rcode=0)
-                   :qchain(false,false,false) {
+                   :qcount(qlst ? 0 : 1) {
       ref=r;
       refcode=rcode;
       tcons=c;
-      if (qlst!=NULL) qchain.Add(*((GList<GffObj>*)qlst));
-                 else qchain.Add(c);
+      //if (qlst!=NULL) qchain.Add(*((GList<GffObj>*)qlst));
+      //           else qchain.Add(c);
       count++;
       tss_id=0;
       p_id=0;

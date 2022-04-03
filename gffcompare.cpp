@@ -1208,7 +1208,7 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
  if (xc->tss_id>0) fprintf(fc, " tss_id \"TSS%d\";",xc->tss_id);
  if (xc->p_id>0) fprintf(fc, " p_id \"P%d\";",xc->p_id);
  if (numQryFiles>1) {
-	 fprintf(fc, " num_samples \"%d\";",xc->qchain.Count());
+	 fprintf(fc, " num_samples \"%d\";",xc->qcount);
  }
  fprintf(fc,"\n");
  //now print exons
@@ -1268,60 +1268,7 @@ void tssCluster(GXLocus& xloc)
         //processTssCl(xcds_num, xpcls[l], faseq);
     }
 }
-/*
-char* getProteinSequence(GffObj* s, int& plen) {
 
-}
-
-void protCluster(GXLocus& xloc, GFaSeqGet *faseq) {
-  if (!faseq)
-    return;
-  GList<GProtCl> xpcls(true,true,false);
-  for (int i=0;i<xloc.tcons.Count();i++) {
-    GXConsensus* c=xloc.tcons[i];
-    if (c->ref==NULL || c->ref->CDstart==0) continue;  //no ref or CDS available
-    if (c->refcode!='=') continue;
-    //get the CDS translation here
-    if (c->aa==NULL) {
-       c->aa=getProteinSequence(c->ref, &c->aalen);
-       if (c->aalen>0 && c->aa[c->aalen-1]=='.') {
-             //discard the final stop codon
-             c->aalen--;
-             c->aa[c->aalen]=0;
-             }
-       }
-    GArray<int> mrgloci(true);
-    int lfound=0;
-    for (int l=0;l<xpcls.Count();l++) {
-        if (xpcls[l]->aalen()!=c->aalen) continue;
-        if (xpcls[l]->add_Pcons(c)) {
-            lfound++;
-            mrgloci.Add(l);
-            }
-        } // for each xpcluster
-    if (lfound==0) {
-        //create a xpcl with only this xconsensus
-        xpcls.Add(new GProtCl(c));
-        }
-      else if (lfound>1) {
-        for (int l=1;l<lfound;l++) {
-              int mlidx=mrgloci[l]-l+1;
-              xpcls[mrgloci[0]]->addMerge(*xpcls[mlidx], c);
-              xpcls.Delete(mlidx);
-              }
-        }
-    }//for each xconsensus in this xlocus
- for (int l=0;l<xpcls.Count();l++) {
-      protcl_num++;
-      for (int i=0;i<xpcls[l]->protcl.Count();i++)
-           xpcls[l]->protcl[i]->p_id=protcl_num;
-      }
- for (int i=0;i<xloc.tcons.Count();i++) {
-   GXConsensus* c=xloc.tcons[i];
-   if (c->aa!=NULL) { GFREE(c->aa); }
-   }
-}
-*/
 void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, /* GFaSeqGet *faseq, */ FILE* fr=NULL) {
 	for (int l=0;l<xloci.Count();l++) {
 		if (xloci[l]->qloci.Count()==0) continue;
@@ -1811,11 +1758,10 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
 }
 
 
-void addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* ts) {
+GXConsensus* addXCons(GXLocus* xloc, GffObj* ref, char ovlcode, GffObj* tcons, CEqList* ts) {
  GXConsensus* c=new GXConsensus(tcons, ts, ref, ovlcode);
  xloc->tcons.Add(c);
- //--this will also check c against the other tcons for containment?:
- //--xloc->addXCons(c);
+ return c;
 }
 
 void findTMatches(GTrackLocus& loctrack, int qcount) {
@@ -1840,16 +1786,6 @@ void findTMatches(GTrackLocus& loctrack, int qcount) {
 						CEqMatch m(ni_t, tMatchScore(ovlen, ni_t, qi_t));
 						eqmatches.Add(&m);
 					}
-					/*
-					bool singleExon=(ni_t->exons.Count()==1 && qi_t->exons.Count()==1);
-					//if (ni_d->eqlist!=NULL &&
-					//		(ni_d->eqlist==qi_d->eqlist || !singleExon)) continue;
-					int ovlen=0;
-					if ((ni_d->eqlist==qi_d->eqlist && qi_d->eqlist!=NULL) ||
-							transcriptMatch(*qi_t, *ni_t, ovlen)) {
-						qi_d->joinEqList(ni_t);
-					}
-					*/
 				}
 	            //select the best match in this next dataset
                 if (eqmatches.Count()>0) {
@@ -1919,6 +1855,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		bool chainHead=qtdata->eqhead;
 		//bool noChain=((qtdata->eqdata & EQCHAIN_TAGMASK)==0);
 		bool noChain=(eqchain==NULL);
+		GXConsensus* xtcons=NULL;
 		if (chainHead || noChain) {
 			cnum++;
 			if (ft!=NULL) fprintf(ft,"%s_%08d\t",cprefix,cnum);
@@ -1938,11 +1875,11 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 				GError("Error: no XLocus created for transcript %s (file %s) [%d, %d], on %s%c:%d-%d\n", qt.getID(),
 						qryfiles[qtdata->locus->qfidx]->chars(), qtdata->locus->qfidx, fidx, qt.getGSeqName(), qt.strand, qt.start, qt.end);
 			}
-			addXCons(xloc, ref, ovlcode, tcons, eqchain);
+			xtcons=addXCons(xloc, ref, ovlcode, tcons, eqchain);
 		} // if chain head or uniq entry (not part of a chain)
 		if (ft==NULL) continue;
 		if (chainHead) {
-			//this is the start of a equivalence class as a printing chain
+			//this is the start of an equivalence class as a printing chain
 			if (ref!=NULL) fprintf(ft,"%s|%s\t%c", getGeneID(ref),ref->getID(), ovlcode);
 			else fprintf(ft,"-\t%c", ovlcode);
 			GffObj* m=mrnas[i];
@@ -1950,19 +1887,22 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 
 			int lastpq=-1;
 			eqchain->setUnique(false);
+			// sort eqchain by qry# so we can catch duplicate/redundant transfrags in the same qry set
 			eqchain->setSorted((GCompareProc*) cmpTData_qset);
+			xtcons->qcount=0; //should already be 0 for chain heads
 
 			for (int k=0;k<eqchain->Count();k++) {
 				m=eqchain->Get(k);
 				mdata=(CTData*)m->uptr;
 				if (mdata->qset==lastpq) {
-					//shouldn't happen, unless this input set is messed up (has duplicates/redundant transfrags)
+					//when a qry file has duplicates/redundant transfrags
 					fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
 							//iround(m->gscore/10),
 							m->exons.Count(),
 							mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
 					continue;
 				}
+				xtcons->qcount++;
 				for (int ptab=mdata->qset-lastpq;ptab>0;ptab--)
 					if (ptab>1) fprintf(ft,"\t-");
 					else fprintf(ft,"\t");
@@ -2019,6 +1959,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
 				} else rmatch=qtdata->eqref;
 				if (rmatch!=NULL) {
 					//assign the same refmatch to all
+					//FIXME: transitivity is NOT guaranteed for single-exon transcripts!
 					for (int k=0;k<qtdata->eqlist->Count();k++) {
 						GffObj* m=qtdata->eqlist->Get(k);
 						((CTData*)m->uptr)->addOvl('=',rmatch,rovlen);
