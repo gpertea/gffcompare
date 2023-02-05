@@ -133,6 +133,12 @@ void geneAdd(GVec<char*>& gset, char* g) {
 	gset.Add(g);
 
 }
+
+// for sorting GVec(<char*>):
+int cmpcstr(const pointer p1, const pointer p2) {
+ return strcmp(*(char**)p1, *(char**)p2);
+}
+
 void printNJTab(FILE* f, QJData& d) {
 	fprintf(f, "%s\t%s:%c", d.t->getID(), d.t->getRefName(), d.t->strand);
 	for (int i=0;i<d.t->exons.Count();++i) {
@@ -172,11 +178,15 @@ void printNJTab(FILE* f, QJData& d) {
 	fprintf(f, "\t");
 	//print list of gene names if possible
 	if (genes.Count()==0) fprintf(f, ".");
-	else
+	else {
+		//alpha sort if multiple
+		if (genes.Count()>1)
+			genes.Sort(&cmpcstr);
 		for (int i=0;i<genes.Count();i++) {
 			if (i) fprintf(f, ",");
 			fprintf(f, "%s", genes[i]);
 		}
+	}
 	fprintf(f, "\t");
 	// now print novel junctions, in groups of 2 :nn|n.|.n
 	char jj[3]={'.','.','\0'};
