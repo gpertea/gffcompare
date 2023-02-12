@@ -12,6 +12,7 @@ bool stricterMatching=false;
 int terminalMatchRange=0;
 bool noMergeCloseExons=false;
 bool debug=false;
+int tssDist=100;
 
 int GXConsensus::count=0;
 
@@ -105,11 +106,11 @@ bool intronChainMatch(GffObj&a, GffObj&b) {
  	return true;
 }
 
-bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5diff=false, bool intron_poking=false) {
+bool intronRedundant(GffObj& ti, GffObj&  tj, bool checkAltTSS=false, bool intron_poking=false) {
 	//two transcripts are "intron redundant" iff one transcript's intron chain
 	// is a sub-chain of the other's
-	//no5diff=true : will NOT consider redundant if they have a different first intron at 5'
-	//allowXintron=true : allow a contained transcript to start or end within a container's intron
+	//checkAltTSS=true : will NOT deem redundant if  different first 5' intron OR tx start diff > tssDist
+	//intron_poking=true : allow a contained transcript to start or end within a container's intron (!)
 	int imax=ti.exons.Count()-1;
 	int jmax=tj.exons.Count()-1;
 	if (imax==0 || jmax==0) return false; //don't deal with single-exon transcripts here
@@ -173,15 +174,26 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool no5diff=false, bool intron_po
 		if (j==jmax && i<imax &&
 			tj.end>ti.exons[i]->end) return false;
 	}
-	if (no5diff && imax!=jmax) { //different number of introns
-		//if they start with a different 5' intron
-		// they are NOT considered redundant
-		if (ti.strand=='+') {
-			if (i_start!=j_start) return false;
+	if (checkAltTSS) {
+		int dist5=-1;
+		if (imax==jmax) {  //same number of exons, check 5' distance
+			if (ti.strand=='+') {
+				dist5=abs((int)ti.start-(int)tj.start);
+			} else { //reverse strand
+				dist5=abs((int)ti.end-(int)tj.end);
+			}
+		} else { //different number of introns
+			//if they start with a different 5' intron they are NOT "redundant"
+			if (ti.strand=='+') {
+				if (i_start!=j_start) return false; //different 5'exon
+				dist5=abs((int)ti.start-(int)tj.start);
+			}
+			else { //reverse strand
+				if (imax-i!=jmax-j) return false; //different 5'exon
+				dist5=abs((int)ti.end-(int)tj.end);
+			}
 		}
-		else { //reverse strand
-			if (imax-i!=jmax-j) return false;
-		}
+		if (dist5>tssDist) return false; //5' end too far, potential alternate TSS
 	}
 	return true; //they are intron-redundant
 }

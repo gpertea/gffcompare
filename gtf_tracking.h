@@ -22,6 +22,8 @@ extern int terminalMatchRange;
 extern bool noMergeCloseExons;
 extern bool debug;
 extern bool reduceRefs;
+extern int tssDist;
+
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
 

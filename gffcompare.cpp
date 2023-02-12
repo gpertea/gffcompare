@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.12.6"
+#define VERSION "0.12.7"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -52,8 +52,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
 \n\
  -e when estimating exon level accuracy, this is the maximum range\n\
     variation allowed for the free ends of terminal exons (default 100);\n\
-	this terminal exon restriction  applies to transcript level accuracy\n\
-	when --strict-match option is given\n\
+    this terminal exon restriction  applies to transcript level accuracy\n\
+    when --strict-match option is given\n\
  --strict-match : transcript matching takes into account the -e range\n\
     for terminal exons; code '=' is only assigned if transcript ends are\n\
     within that range, otherwise code '~' is assigned just for intron chain\n\
@@ -75,9 +75,10 @@ Options for the combined GTF output file:\n\
  -C discard matching and \"contained\" transfrags in the GTF output\n\
     (i.e. collapse intron-redundant transfrags across all query files)\n\
  -A like -C but does not discard intron-redundant transfrags if they start\n\
-    with a different 5' exon (keep alternate TSS)\n\
- -X like -C but also discard contained transfrags if transfrag ends stick out\n\
-    within the container's introns\n\
+    with a different 5' exon (possible alternate TSS; for the same first 5'\n\
+    intron, minimum TSS distance is specified by -d option, default 100)\n\
+ -X like -C but also discard contained transfrags even when transfrag ends \n\
+    stick out within the container's introns\n\
  -K for -C/-A/-X, do NOT discard any redundant transfrag matching a reference\n\
 "
 /*
@@ -130,7 +131,6 @@ GFastaHandler gfasta;
 int xlocnum=0;
 int tsscl_num=0; //for tss cluster IDs
 int protcl_num=0; //for "unique" protein IDs within TSS clusters
-int tssDist=100;
 uint exonEndRange=100; // -e value, only used for exon level Sn/Sp
 //int total_tcons=0;
 int total_xloci_alt=0;
@@ -409,7 +409,7 @@ int main(int argc, char* argv[]) {
 	  //redundancy check will NOT consider containment for alt. TSS
 	  keepAltTSS=true;
 	  if (discardContained)
-		   GMessage("Warning: option -C will be ignored, -A takes precedence.\n");
+		   GMessage("Warning: option -C ignored, -A takes precedence.\n");
 	  discardContained=true;
   }
   if (args.getOpt('X')) {
