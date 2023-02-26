@@ -39,17 +39,17 @@ const char* USAGE =
 "  --strict-match : '=' overlap code is assigned when all exons match,\n"
 "               while '~' code is assigned when only introns match\n"
 "  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
-"  -T           output a 7 column table: \n"
-"                 queryID, ovl_code, refID, ref_cov, rev_ovl_bias,\n"
-"                    ref_introns_matching, num_matching_junctions\n"
+"  -T           output a 7 column table with overlap info: \n"
+"                 queryID, class_code, refID, ref_cov, rev_ovl_bias,\n"
+"                    matching_introns, num_matching_junctions\n"
 "  --best, -B   for -T/-t option, only show the \"best\" class code\n"
 "  -t <Tfile>   write the table described for -T to file <Tfile>, while\n"
 "               allowing other option for main output\n"
 "  -J           for each query transcript output a 6 column table\n"
 "                 queryID, chr:strand:exons, list of reference transcripts,\n"
 "                 num ref genes, list of gene names, list of novel junctions\n"
-"  -S           report only simple exon overlap percentage with the reference\n"
-"               transcripts, without classification (one line per query)\n";
+"  -S           report only simple exon overlap percentage with reference\n"
+"               transcripts (one line per query)\n";
 
 bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
  //this is called when a query overlaps a and b with the same overlap length
@@ -223,7 +223,7 @@ void printNJTab(FILE* f, QJData& d) {
 }
 
 void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
-	fprintf(fwtab, "%s\t%c\t%s\t", tid, od.ovlcode, r->getID());
+	fprintf(fwtab, "%s\t%c\t%s", tid, od.ovlcode, r->getID());
 	if (od.ovlen) {
 		float rcov= (100.00*od.ovlen)/r->covlen;
 		fprintf(fwtab, "\t%1.f\t", rcov);
