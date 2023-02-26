@@ -6,10 +6,10 @@
 
 #define VERSION "0.12.8"
 #define MIN_GFF_VERSION 128
+
 #ifndef GFF_VERSION
  #define GFF_VERSION 0
 #endif
-
 #if GFF_VERSION < MIN_GFF_VERSION
  #error "gff.h version mismatch! Please pull/clone gclib"
 #endif
