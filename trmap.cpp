@@ -11,6 +11,7 @@ bool stricterMatching=false;
 bool showCDS=false;
 bool outRefOvlTab=false;
 bool novelJTab=false;
+bool tbest=false;
 GStr fltCodes;
 
 struct GSTree {
@@ -32,7 +33,9 @@ const char* USAGE =
 "  -T           output a 7 column table: \n"
 "                 queryID, ovl_code, refID, ref_cov, rev_ovl_bias,\n"
 "                    ref_introns_matching, num_matching_junctions\n"
-"  -t <Tfile>   write the table described for -T to file <Tfile>\n"
+"  --best, -B   for -T/-t option, only show the \"best\" class code\n"
+"  -t <Tfile>   write the table described for -T to file <Tfile>, while\n"
+"               allowing other option for main output\n"
 "  -J           for each query transcript output a 6 column table\n"
 "                 queryID, chr:strand:exons, list of reference transcripts,\n"
 "                 num ref genes, list of gene names, list of novel junctions\n"
@@ -65,11 +68,12 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
 
 struct TRefOvl {
 	GffObj* ref;
-	char ovlcode;
     byte rank;
-    int ovlen;
+	//char ovlcode;
+    //int ovlen;
+    TOvlData* od;
     int16_t numExons; //number of exons in the query mRNA
-    int16_t numJmatch; //number of matching junctions in this overlap
+    //int16_t numJmatch; //number of matching junctions in this overlap
 
     bool operator<(TRefOvl& b) { //lower = higher priority
 		if (rank==b.rank && b.ref!=NULL && ref!=NULL) {
@@ -77,10 +81,11 @@ struct TRefOvl {
 				if (ref->exons.Count()==1) return true; //SET match always has priority
 				else if (b.ref->exons.Count()==1) return false;
 			}
-			if (numExons>1 && b.numJmatch!=numJmatch) {
-				return (numJmatch > b.numJmatch);
+			if (numExons>1 && b.od->numJmatch!=od->numJmatch) {
+				return (od->numJmatch > b.od->numJmatch);
 			}
-			return (ovlen==b.ovlen)? closerRef(ref, b.ref, numExons, rank) : (ovlen>b.ovlen);
+			return (od->ovlen==b.od->ovlen) ?
+				closerRef(ref, b.ref, numExons, rank) : (od->ovlen>b.od->ovlen);
 		}
 		else return rank<b.rank;
 	}
@@ -88,16 +93,16 @@ struct TRefOvl {
 		return (rank==b.rank && ref==b.ref);
 	}
 
-	TRefOvl(GffObj* r=NULL, char code=0, int exonCount=0, int olen=0, int jmatch=0):ref(r),
-			ovlcode(code), ovlen(olen), numJmatch(jmatch) {
-    	if (exonCount>255) exonCount=255;
-    	numExons=exonCount;
-		rank=classcode_rank(code);
+	TRefOvl(GffObj* r, TOvlData& o, int exonCount=0): ref(r),
+		rank(classcode_rank(o.ovlcode)), od(NULL), numExons(exonCount>255? 255 : exonCount) {
+		od=new TOvlData(o.ovlcode, o.ovlen, o.numJmatch, &o.jbits, &o.rint);
+		od->ovlRefstart=o.ovlRefstart;
 	}
+	~TRefOvl() { delete od; }
 };
 
 struct QJData {
-	GBitVec jmd; //bit array showing ref-matched junctions
+	GBitVec jmd; //bit array setting ref-matched junctions
 	GList<TRefOvl> refovls;
 	GffObj* t;
 	QJData():t(NULL) {}
@@ -108,15 +113,16 @@ struct QJData {
 		  if (jmd.size()!=od.jbits.size()) GError("Error: mismatching QJData bit vector size!\n");
 		#endif
 		jmd |= od.jbits;
-		int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
+		//int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
+		int idx=refovls.Add(new TRefOvl(ref, od, t->exons.Count()));
 		#ifndef NDEBUG
 		  if (idx<0) {
-			  refovls.Found(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch), idx);
+			  refovls.Found(new TRefOvl(ref, od, t->exons.Count()), idx);
 			  GMessage("Error: %s trying to add duplicate overlap of ref %s (previously found as %s)!\n",
 					  t->getID(), ref->getID(), refovls[idx]->ref->getID() );
 			  GMessage(" Existing ref overlaps:\n");
 			  for (int i=0;i<refovls.Count();i++) {
-				  GMessage("%c\t%s\n", refovls[i]->ovlcode, refovls[i]->ref->getID());
+				  GMessage("%c\t%s\n", refovls[i]->od->ovlcode, refovls[i]->ref->getID());
 			  }
 			  GError("exiting..\n");
 		  }
@@ -167,7 +173,7 @@ void printNJTab(FILE* f, QJData& d) {
 		char* g=d.refovls[i]->ref->getGeneName();
 		if (g==NULL) g=d.refovls[i]->ref->getGeneID();
 		if (i) fprintf(f, ",");
-		fprintf(f, "%c|%s|", d.refovls[i]->ovlcode, d.refovls[i]->ref->getID());
+		fprintf(f, "%c|%s|", d.refovls[i]->od->ovlcode, d.refovls[i]->ref->getID());
 		if (g) {
 			fprintf(f, "%s", g);
 			if (d.refovls[i]->rank<CLASSCODE_OVL_RANK)
@@ -207,24 +213,85 @@ void printNJTab(FILE* f, QJData& d) {
 
 }
 
+void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
+	fprintf(fwtab, "%s\t%c\t%s\t", tid, od.ovlcode, r->getID());
+	if (od.ovlen) {
+		float rcov= (100.00*od.ovlen)/r->covlen;
+		fprintf(fwtab, "\t%1.f\t", rcov);
+	} else fprintf(fwtab, "\t.\t");
+    float rovlbias=0;
+	if (r->strand=='-') {
+		if (od.ovlen) {
+			int rs=r->covlen-od.ovlen-(od.ovlRefstart-1);
+			int rsmid=rs+od.ovlen/2;
+			int rmid=r->covlen/2;
+			//overlap deviation from center (centered=0.5)
+			rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
+			fprintf(fwtab, "%.2f", rovlbias);
+		} else fprintf(fwtab,".");
+		int im=-1;
+		int nint=od.rint.size();
+		if (nint)
+			im=od.rint.find_first();
+		if (im>=0) {
+		   GVec<int> introns;
+		   introns.cAdd(nint-im);
+		   while( (im=od.rint.find_next(im))>0 )
+			   introns.cAdd(nint-im);
+		   im=introns.Pop();
+		   fprintf(fwtab,"\t%d:%d", nint, im );
+		   int ni=introns.Count()-1;
+		   for (int i=ni;i>=0;--i)
+			   fprintf(fwtab,",%d", introns[i]);
+		} else fprintf(fwtab, "\t.");
+	} else {
+		if (od.ovlen) {
+			int rsmid=od.ovlRefstart-1+od.ovlen/2;
+			int rmid=r->covlen/2;
+			//overlap deviation from center (centered=0.5)
+			rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
+			fprintf(fwtab, "%.2f", rovlbias);
+		} else fprintf(fwtab,".");
+		int im=-1;
+		int nint=od.rint.size();
+		if (nint)
+			im=od.rint.find_first();
+		if (im>=0) {
+			   fprintf(fwtab,"\t%d:%d", nint, im+1 );
+		   while( (im=od.rint.find_next(im))>0 )
+			   fprintf(fwtab,",%d", im+1);
+		} else fprintf(fwtab, "\t.");
+	}
+	fprintf(fwtab, "\t%d\n", od.numJmatch);
+}
+
+void printTabBest(FILE* fwtab, QJData& d) {
+  if (d.refovls.Count()>0) {
+	  TRefOvl* ro=d.refovls.First();
+	  printOvlTab(fwtab, d.t->getID(), ro->ref, *(ro->od));
+  }
+}
+
+
 int main(int argc, char* argv[]) {
 	FILE* fwtab=NULL;
-	GArgs args(argc, argv, "help;strict-match;show-cds;hTJSc:t:o:");
+	GArgs args(argc, argv, "help;strict-match;best;show-cds;hTBJSc:t:o:");
 	args.printError(USAGE, true);
 	if (args.getOpt('h') || args.getOpt("help")) {
 		GMessage(USAGE);
 		exit(EXIT_SUCCESS);
 	}
-	bool optT=false;
+	bool optT=false; //-T output ONLY
 	if (args.getOpt('S')) simpleOvl=true;
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
+	if (args.getOpt("best") || args.getOpt('B')) tbest=true;
 	if (args.getOpt('T')) outRefOvlTab=optT=true;
 	if (args.getOpt('J')) novelJTab=true;
 	if ((int)outRefOvlTab + (int)simpleOvl+(int)novelJTab > 1)
 		GError("%s\nError: options -T, -J and -S are mutually exclusive!\n", USAGE);
 	const char* tfo=args.getOpt('t');
-	if (tfo) {
+	if (tfo) { //secondary -T output
 		outRefOvlTab=true;
 		if (strcmp(tfo, "-")==0) fwtab=stdout;
 			          else {
@@ -232,6 +299,8 @@ int main(int argc, char* argv[]) {
 			            if (fwtab==NULL) GError("Error creating output file %s !\n",tfo);
 			          }
 	}
+	if (tbest && !outRefOvlTab)
+		GError("%s\nError: option -B/--best requires -T or -t!\n", USAGE);
     const char*s=args.getOpt('c');
     if (s!=NULL) {
     	fltCodes=s;
@@ -288,7 +357,7 @@ int main(int argc, char* argv[]) {
 		fext=getFileExt(q_file);
 	}
 	GffReader* myQ = new GffReader(fq, true, true);
-	if (novelJTab) myQ->keepAttrs();
+	if (novelJTab || tbest) myQ->keepAttrs();
 	if (fext && Gstricmp(fext, "bed")==0) myQ->isBED();
 	t=NULL;
 	while ((t=myQ->readNext())!=NULL) {
@@ -304,7 +373,7 @@ int main(int argc, char* argv[]) {
 		GVec<int> sidx;
 		GSTree* cTree=map_trees[gseq];
 		sidx.cAdd(0); //always attempt to search the '.' strand
-		if (novelJTab) {
+		if (novelJTab || tbest) {
 			if (t->strand=='+') { sidx.cAdd(1); sidx.cAdd(2); }
 			else { sidx.cAdd(2); sidx.cAdd(1); }
 		} else {
@@ -314,123 +383,74 @@ int main(int argc, char* argv[]) {
 		}
 		QJData* tjd=NULL;
 		//bool jfound=false;
-		if (novelJTab) tjd=new QJData(*t);
+		if (novelJTab || tbest) tjd=new QJData(*t);
 		for (int k=0;k<sidx.Count();++k) {
 			GVec<GSeg*> *enu = cTree->it[sidx[k]].Enumerate(t->start, t->end);
-			if(enu->Count()>0) { //overlaps found
-				bool qprinted=false;
-				for (int i=0; i<enu->Count(); ++i) {
-					GffObj* r=(GffObj*)enu->Get(i);
-					TOvlData od=getOvlData(*t, *r, stricterMatching);
-					if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
-						continue;
-					if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
-						continue;
-					if (outRefOvlTab) { //7 column output
-						//int xovlen=r->exonOverlapLen(*t);
-						//GMessage("DEBUG:: Exon overlap: %d (reported by getOvlData: %d)\n", xovlen, od.ovlen);
-						fprintf(fwtab, "%s\t%c\t%s\t", t->getID(), od.ovlcode, r->getID());
-						if (od.ovlen) {
-							float rcov= (100.00*od.ovlen)/r->covlen;
-							fprintf(fwtab, "\t%1.f\t", rcov);
-						} else fprintf(fwtab, "\t.\t");
-					    float rovlbias=0;
-						if (r->strand=='-') {
-							if (od.ovlen) {
-								int rs=r->covlen-od.ovlen-(od.ovlRefstart-1);
-								int rsmid=rs+od.ovlen/2;
-								int rmid=r->covlen/2;
-								//overlap deviation from center (centered=0.5)
-								rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
-								fprintf(fwtab, "%.2f", rovlbias);
-							} else fprintf(fwtab,".");
-							int im=-1;
-							int nint=od.rint.size();
-							if (nint)
-								im=od.rint.find_first();
-							if (im>=0) {
-							   GVec<int> introns;
-							   introns.cAdd(nint-im);
-							   while( (im=od.rint.find_next(im))>0 )
-								   introns.cAdd(nint-im);
-							   im=introns.Pop();
-							   fprintf(fwtab,"\t%d:%d", nint, im );
-							   int ni=introns.Count()-1;
-							   for (int i=ni;i>=0;--i)
-								   fprintf(fwtab,",%d", introns[i]);
-							} else fprintf(fwtab, "\t.");
-						} else {
-							if (od.ovlen) {
-								int rsmid=od.ovlRefstart-1+od.ovlen/2;
-								int rmid=r->covlen/2;
-								//overlap deviation from center (centered=0.5)
-								rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
-								fprintf(fwtab, "%.2f", rovlbias);
-							} else fprintf(fwtab,".");
-							int im=-1;
-							int nint=od.rint.size();
-							if (nint)
-								im=od.rint.find_first();
-							if (im>=0) {
-  							   fprintf(fwtab,"\t%d:%d", nint, im+1 );
-							   while( (im=od.rint.find_next(im))>0 )
-								   fprintf(fwtab,",%d", im+1);
-							} else fprintf(fwtab, "\t.");
-						}
-						fprintf(fwtab, "\t%d\n", od.numJmatch);
+			if(enu->Count()==0) { delete enu; continue; } // no overlaps found
+			bool qprinted=false;
+			for (int i=0; i<enu->Count(); ++i) { //for each range overlap
+				GffObj* r=(GffObj*)enu->Get(i);
+				TOvlData od=getOvlData(*t, *r, stricterMatching);
+				//no real code found (?)
+				if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
+					continue;
+				// opposite strand non-overlaps are ignored
+				if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
+					continue;
+				// -- two output modes: aggregating (best/sorted), or as-you-go, for each overlap
+				// novelJTab and tbest are aggregating
+				if (novelJTab) {
+					tjd->add(r, od);
+				} else { // no -J output
+					if (outRefOvlTab) {// -T or -t
+						if (tbest) tjd->add(r, od);
+						else printOvlTab(fwtab, t->getID(), r, od);
 					}
-					if (!optT) {
-						if (simpleOvl) {
-							if (od.ovlen==0) continue;
-							float rcov=(100.00*od.ovlen)/r->covlen;
-							if (!qprinted) {
-								fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
-								qprinted=true;
-							}
-							//append each overlapping referenced to the same line
-							fprintf(outFH, "\t%s:%.1f", r->getID(), rcov);
-						}  else if (novelJTab) {
-							tjd->add(r, od);
+					// could be default pseudo-fasta, or simpleOvl
+				    if (simpleOvl) { //-S output
+						if (od.ovlen==0) continue;
+						float rcov=(100.00*od.ovlen)/r->covlen;
+						if (!qprinted) {
+							fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
+							qprinted=true;
 						}
-						else  { //full pseudo-FASTA output
-							if (!qprinted) {
-								fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
-								t->printExonList(outFH);
-								if (showCDS && t->hasCDS()) {
-								  fprintf(outFH, " CDS:");
-								  t->printCDSList(outFH);
-								}
-								fprintf(outFH, "\n");
-								qprinted=true;
-							}
-							fprintf(outFH, "%c\t", od.ovlcode);
-							fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
-								r->start, r->end, r->getID());
-							r->printExonList(outFH);
-							if (showCDS && r->hasCDS()) {
-							  fprintf(outFH, "\tCDS:");
-							  r->printCDSList(outFH);
+						//append each overlapping referenced to the same line
+						fprintf(outFH, "\t%s:%.1f", r->getID(), rcov);
+					} // -S output
+					else if (!optT) { //no -T, no -S => default pseudo-FASTA output
+						if (!qprinted) {
+							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
+							t->printExonList(outFH);
+							if (showCDS && t->hasCDS()) {
+							  fprintf(outFH, " CDS:");
+							  t->printCDSList(outFH);
 							}
 							fprintf(outFH, "\n");
+							qprinted=true;
 						}
-					} //for each range overlap
-					if (simpleOvl && qprinted)
-						fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
-				} //if !optT
-			} //has overlaps
-			/*if (novelJTab) {
-				if (tjd->refovls.Count()>0) {
-					if (!jfound) printNJTab(outFH, *tjd);
-				    jfound=true;
-					delete tjd;
-					tjd=NULL;
-				}
-			}
-			*/
+						fprintf(outFH, "%c\t", od.ovlcode);
+						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
+							r->start, r->end, r->getID());
+						r->printExonList(outFH);
+						if (showCDS && r->hasCDS()) {
+						  fprintf(outFH, "\tCDS:");
+						  r->printCDSList(outFH);
+						}
+						fprintf(outFH, "\n");
+					} //default pseudo-FASTA output
+				} //no -J
+			} //for each range overlap
+			if (simpleOvl && qprinted)
+			fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
 			delete enu;
 		} //for each searchable strand
-		if (novelJTab && tjd) {
-			printNJTab(outFH, *tjd);
+		if (tjd) {
+			if (novelJTab) {
+				printNJTab(outFH, *tjd);
+			}
+			if (tbest) {
+				printTabBest(fwtab, *tjd);
+			}
 			delete tjd;
 		}
 		delete t;
