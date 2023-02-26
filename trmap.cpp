@@ -41,7 +41,9 @@ const char* USAGE =
 "  -c '<codes>' only show overlaps with code in '<codes>' (e.g. -c '=ck')\n"
 "  -T           output a 7 column table with overlap info: \n"
 "                 queryID, class_code, refID, ref_cov, rev_ovl_bias,\n"
-"                    matching_introns, num_matching_junctions\n"
+"                    matching_ref_introns, num_matching_junctions\n"
+"                ..where matching_ref_introns has this format:\n"
+"                   total_ref_intron_count:list_of_matching_introns\n"
 "  --best, -B   for -T/-t option, only show the \"best\" class code\n"
 "  -t <Tfile>   write the table described for -T to file <Tfile>, while\n"
 "               allowing other option for main output\n"
@@ -239,9 +241,9 @@ void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
 			fprintf(fwtab, "%.2f", rovlbias);
 		} else fprintf(fwtab,".");
 		int im=-1;
-		int nint=od.rint.size();
+		int nint=od.rint.size(); //number of introns
 		if (nint)
-			im=od.rint.find_first();
+			im=od.rint.find_first(); //find first matching intron in ref
 		if (im>=0) {
 		   GVec<int> introns;
 		   introns.cAdd(nint-im);
