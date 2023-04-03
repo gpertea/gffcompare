@@ -4,8 +4,8 @@
 #include "GBitVec.h"
 #include "GIntervalTree.hh"
 
-#define VERSION "0.12.8"
-#define MIN_GFF_VERSION 128
+#define VERSION "0.12.9"
+#define MIN_GFF_VERSION 129
 
 #ifndef GFF_VERSION
  #define GFF_VERSION 0
@@ -50,7 +50,9 @@ const char* USAGE =
 "  -J           for each query transcript output a 6 column table\n"
 "                 queryID, chr:strand:exons, list of reference transcripts,\n"
 "                 num ref genes, list of gene names, list of novel junctions\n"
-"  -S           report only simple exon overlap percentage with reference\n"
+"  -f <file>    for -J, report \"fusion\" query transcripts, i.e. transcripts\n"
+"               that overlaps multiple non-overlapping reference genes \n"
+"  -S           report only simple exon overlap percentage with any reference\n"
 "               transcripts (one line per query)\n";
 
 bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
@@ -140,6 +142,58 @@ struct QJData {
 		#endif
 	}
 };
+
+struct RefGene:public GSeg { //start/end: min-max observed for transcripts in this gene
+  const char* gene_id; //points to gene_ids in ref GffObj
+  // keep track of ref genes with their merged exons and ranges
+  GArray<GSeg> mexons; //set of non-overlapping exon spans (resulted after merging overlapping exons)
+  GVec<GffObj*> transcripts;
+  //GVec<GSeg> introns; //set of all introns (could be overlapping)
+  GVec<RefGene*> ogenes; //overlapping genes (based on mexon-overlaps only)
+  RefGene():gene_id(NULL),mexons(true, true),transcripts(), ogenes() {}
+  RefGene(const char* gid, GffObj& t):GSeg(t.start, t.end),
+		  gene_id(gid),mexons(true, true), transcripts(), ogenes() {
+	  transcripts.cAdd(&t);
+	  for (int i=0;i<t.exons.Count();i++)  {
+			  mexons.Add(t.exons[i]);
+	  }
+  }
+
+  int getLength() {
+	int r=0;
+	for (int i=0;i<mexons.Count();i++)
+		r+=mexons[i].len();
+	return r;
+  }
+
+  void addTranscript(GffObj& t) {
+	  transcripts.cAdd(&t);
+	  for (int i=0;i<t.exons.Count();i++) { //for each exon of the incoming transcript
+		  int ni=mexons.Add(t.exons[i]); //exon is added to mexons as ordered by start coord
+		  if (ni>=0) { //exon added, check overlaps with other mexons and merge as needed
+			  int delcount=0;
+			  int j=ni+1;
+			  //could overlap the preceding mexon (mexons[ni-1])
+			  if (ni>0 && mexons[ni-1].end>=mexons[ni].start) {
+				  ni--; //merge into preceding exon, which now takes over
+				  delcount++;
+			  }
+			  //check how many mexons are being overlapped by this new added exon
+			  while (j<mexons.Count() && mexons[ni].end>mexons[j].start) {
+				 delcount++;
+                 j++;
+			  }
+			  if (delcount) {
+				  j--; //merge with last overlapped range
+				  if (mexons[ni].end<mexons[j].end)
+					   mexons[ni].end=mexons[j].end;
+				  mexons.Delete(ni+1,delcount);
+			  }
+		  }
+	  }
+  }
+};
+
 //queryID, chr:strand:exons, list of ovlcode|ref_transcripts|gene,
 //                num genes,  list of novel junctions
 
@@ -282,7 +336,6 @@ void printTabBest(FILE* fwtab, QJData& d) {
 	  printOvlTab(fwtab, d.t->getID(), ro->ref, *(ro->od));
   }
 }
-
 
 int main(int argc, char* argv[]) {
 	FILE* fwtab=NULL;
