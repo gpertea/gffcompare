@@ -1,0 +1,10 @@
+* should never merge/assemble multi-exon transfrags just based on exon overlap 
+
+* we split a transfrag joining two NEIGHBORING (spans non-overlapping) genes
+   only if:
+     * it has j overlaps in both genes
+        OR j in one, k|m|n in the other
+  AND  
+     * transfrag spans at least half of each ref gene span
+
+?? AND it has a novel junction?

@@ -84,7 +84,7 @@ struct TRefOvl {
     byte rank;
 	//char ovlcode;
     //int ovlen;
-    TOvlData* od;
+    TOvlData* od; //FIXME: find a way to detect exon skipping!
     int16_t numExons; //number of exons in the query mRNA
     //int16_t numJmatch; //number of matching junctions in this overlap
 
@@ -259,7 +259,8 @@ void printNJTab(FILE* f, QJData& d) {
 		}
 	}
 	fprintf(f, "\t");
-	// now print novel junctions, in groups of 2 :nn|n.|.n
+	// now print novel junctions, in groups of 2:nn|n.|.n|.. 
+	//FIXME : .. add exon skip as .. code => novel intron, even though both splice sites are known!
 	char jj[3]={'.','.','\0'};
 	bool printed=false;
 	for (uint i=0;i<d.jmd.size();i+=2) {
