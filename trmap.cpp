@@ -84,9 +84,8 @@ struct TRefOvl {
     byte rank;
 	//char ovlcode;
     //int ovlen;
-    TOvlData* od; //FIXME: find a way to detect exon skipping!
-    int16_t numExons; //number of exons in the query mRNA
-    //int16_t numJmatch; //number of matching junctions in this overlap
+    TOvlData* od; //copy of overlap data
+    int numExons; //number of exons in the query mRNA
 
     bool operator<(TRefOvl& b) { //lower = higher priority
 		if (rank==b.rank && b.ref!=NULL && ref!=NULL) {
@@ -107,26 +106,47 @@ struct TRefOvl {
 	}
 
 	TRefOvl(GffObj* r, TOvlData& o, int exonCount=0): ref(r),
-		rank(classcode_rank(o.ovlcode)), od(NULL), numExons(exonCount>255? 255 : exonCount) {
-		od=new TOvlData(o.ovlcode, o.ovlen, o.numJmatch, &o.jbits, &o.rint);
-		od->ovlRefstart=o.ovlRefstart;
+		rank(classcode_rank(o.ovlcode)), numExons(exonCount) {
+		od=new TOvlData(o);
 	}
 	~TRefOvl() { delete od; }
 };
 
 struct QJData {
-	GBitVec jmd; //bit array setting ref-matched junctions
+	GBitVec jmd; //bit array for junctions (1 = ref-matched junction)
+	GBitVec inmd; //bit array for introns (1 = ref-matched intron)
+    //exon-skipping events = 11 in jmd having no corresponding 1 bit set in inmd
 	GList<TRefOvl> refovls;
-	GffObj* t;
+	GffObj* t; //query transcript
+	GVec<GSeg> introns;
 	QJData():t(NULL) {}
-	QJData(GffObj& tr):jmd( (tr.exons.Count()-1)<<1 ), refovls(true,true,true),
-			t(&tr) { }
+	QJData(GffObj& tr):jmd( (tr.exons.Count()-1)<<1 ), inmd(tr.exons.Count()-1),
+			refovls(true,true,true), t(&tr), introns() {
+		GSeg in(0,0);
+		for (int i=1;i<tr.exons.Count();i++) {
+			in.start=tr.exons[i-1]->end+1;
+			in.end=tr.exons[i]->start-1;
+			introns.Add(&in);
+		}
+	}
+	// return index of intron matching given intron coordinates if any
+	// assumes that introns are sorted, non-overlapping
+    int findIntron(uint istart, uint iend, int i0=0) {
+    	int r=-1;
+    	for (int i=i0;i<introns.Count();i++) {
+    		if (introns[i].start>istart) break;
+    		if (introns[i].start==istart && introns[i].end==iend)
+    		   { r=i; break; }
+    	}
+    	return r;
+    }
+
 	void add(GffObj* ref, TOvlData& od) {
 	    #ifndef NDEBUG
 		  if (jmd.size()!=od.jbits.size()) GError("Error: mismatching QJData bit vector size!\n");
 		#endif
 		jmd |= od.jbits;
-		//int idx=refovls.Add(new TRefOvl(ref, od.ovlcode, t->exons.Count(), od.ovlen, od.numJmatch));
+        inmd |= od.inbits;
 		int idx=refovls.Add(new TRefOvl(ref, od, t->exons.Count()));
 		#ifndef NDEBUG
 		  if (idx<0) {
@@ -259,17 +279,23 @@ void printNJTab(FILE* f, QJData& d) {
 		}
 	}
 	fprintf(f, "\t");
-	// now print novel junctions, in groups of 2:nn|n.|.n|.. 
-	//FIXME : .. add exon skip as .. code => novel intron, even though both splice sites are known!
+	// now print novel junctions, in groups of 2:nn|n.|.n|ss|..
+	//ss is exon skip code = novel intron, even though both splice sites are known
 	char jj[3]={'.','.','\0'};
 	bool printed=false;
 	for (uint i=0;i<d.jmd.size();i+=2) {
 		bool smatch=d.jmd[i];
 		bool ematch=d.jmd[i+1];
-		if (smatch && ematch) continue;
+		if (smatch && ematch) {
+			if (d.inmd[i>>1]) continue; //known intron
+			//exon skipping! novel intron without novel junctions
+			jj[0]= 's';
+			jj[1]= 's';
+		} else {
+			jj[0]= (smatch) ? '.' : 'n';
+			jj[1]= (ematch) ? '.' : 'n';
+		}
 		int ei = i>>1; // index of exon on the left
-		jj[0]= (smatch) ? '.' : 'n';
-		jj[1]= (ematch) ? '.' : 'n';
 		if (printed) fprintf(f, ",");
 		printed=true;
 		fprintf(f, "%d-%d:%s", d.t->exons[ei]->end+1, d.t->exons[ei+1]->start-1, jj);
