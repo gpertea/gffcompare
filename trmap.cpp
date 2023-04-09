@@ -306,7 +306,10 @@ void printNJTab(FILE* f, QJData& d) {
 }
 
 void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
-	fprintf(fwtab, "%s\t%c\t%s", tid, od.ovlcode, r->getID());
+	if (!r) return;
+	const char* rgi=r->getGeneID(); if (rgi==NULL) rgi="";
+	const char* rgn=r->getGeneName(); if (rgn==NULL) rgn="";
+	fprintf(fwtab, "%s\t%c\t%s|%s|%s", tid, od.ovlcode, r->getID(), rgi ,rgn );
 	if (od.ovlen) {
 		float rcov= (100.00*od.ovlen)/r->covlen;
 		fprintf(fwtab, "\t%1.f\t", rcov);
