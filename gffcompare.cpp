@@ -78,7 +78,9 @@ Options for the combined GTF output file:\n\
     with a different 5' exon (possible alternate TSS; for the same first 5'\n\
     intron, minimum TSS distance is specified by -d option, default 100)\n\
  -X like -C but also discard contained transfrags even when transfrag ends \n\
-    stick out within the container's introns\n\
+    stick out within the container's introns (by at most 50 bases)\n\
+ --cset for -C/-A/-X also discard single exon transfrags when fully contained\n\
+        in an exon of a multi-exon transfrag \n\
  -K for -C/-A/-X, do NOT discard any redundant transfrag matching a reference\n\
 "
 /*
@@ -255,7 +257,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;"
+		  "version;help;debug;gids;cset:gidnames;gnames;no-merge;strict-match;"
 		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
@@ -415,6 +417,13 @@ int main(int argc, char* argv[]) {
   if (args.getOpt('X')) {
 	discardContained=true;
 	allowIntronSticking=true;
+  }
+  if (args.getOpt("cset")) {
+	  if (!discardContained) {
+		  GMessage("Warning: --cset option ignored, requires -C, -A or -X\n");
+	  } else {
+		  cSETMerge=true;
+	  }
   }
   keepRefMatching=(args.getOpt('K')!=NULL);
   if (keepRefMatching && !discardContained) {
@@ -1858,11 +1867,12 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		GXConsensus* xtcons=NULL;
 		if (chainHead || noChain) {
 			cnum++;
-			if (ft!=NULL) fprintf(ft,"%s_%08d\t",cprefix,cnum);
+			int numexons=tcons->exons.Count();
+			if (ft!=NULL) fprintf(ft,"%s_%08d|%d|%d\t",cprefix,cnum, numexons, tcons->covlen);
 			GXLocus* xloc=qtdata->locus->xlocus;
 			if (xloc!=NULL) {
 				if (ft!=NULL) fprintf(ft, "XLOC_%06d\t",xloc->id);
-				if (tcons->exons.Count()>1) {
+				if (numexons>1) {
 					//! only multi-exon mRNAs are counted for multi-transcript xloci !
 					xloc->num_mtcons++;
 					if (xloc->num_mtcons==2)

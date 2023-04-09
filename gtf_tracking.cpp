@@ -9,10 +9,12 @@ bool reduceRefs=false; //-R
 
 bool qDupStrict=false;
 bool stricterMatching=false;
+bool cSETMerge=false;
 int terminalMatchRange=0;
 bool noMergeCloseExons=false;
 bool debug=false;
 int tssDist=100;
+int intronStickingMax=50;
 
 int GXConsensus::count=0;
 
@@ -140,19 +142,21 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool checkAltTSS=false, bool intro
 		return false;
 	}
 	//we have the first matching intron on the left
-	if (!intron_poking) {
+	int intron_ovl=intron_poking ? intronStickingMax : 0;
+	//if (!intron_poking) {
 		if (j>i //ti starts within tj (ti probably contained within tj)
 				//i==1, ti's start must not conflict with the previous intron of tj
-				&& ti.start<tj.exons[j-1]->start) return false;
+				&& ti.start+intron_ovl<tj.exons[j-1]->start) return false;
 		//or tj contained within ti?
-		if (i>j && tj.start<ti.exons[i-1]->start) return false;
-	}
+		if (i>j && tj.start+intron_ovl<ti.exons[i-1]->start) return false;
+	//}
 	// ---- comment out the next 2 if statements below if just "intron compatibility"
 	//      (i.e. extension of intron chains) is desired
 	if (j>i  //ti starts within tj (ti probably contained within tj)
 		 && // then tj must contain ti, so ti's last intron must end with or before tj's last intron
 		 ti.exons[imax]->start>tj.exons[jmax]->start) return false;
-	if (i>j && tj.exons[jmax]->start>ti.exons[imax]->start) return false;
+	if (i>j &&
+		  tj.exons[jmax]->start>ti.exons[imax]->start) return false;
 	// ----
 
 	//now check if the rest of the introns match in the same sequence
@@ -166,14 +170,14 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool checkAltTSS=false, bool intro
 		j++;
 	}
 	i--; j--; //i,j=indexes of last (rightmost) matching intron i_end, j_end
-	if (!intron_poking) { //check for terminal exons of the contained sticking out within a container's intron
+	//if (!intron_poking) { //check for terminal exons of the contained sticking out within a container's intron
 		if (i==imax && j<jmax && //tj has more introns
 			// check if ti's end doesn't conflict with the current tj exon boundary
-			 ti.end>tj.exons[j]->end) return false;
+			 ti.end>tj.exons[j]->end+intron_ovl) return false;
 
 		if (j==jmax && i<imax &&
-			tj.end>ti.exons[i]->end) return false;
-	}
+			tj.end>ti.exons[i]->end+intron_ovl) return false;
+	//}
 	if (checkAltTSS) {
 		int dist5=-1;
 		if (imax==jmax) {  //same number of exons, check 5' distance
@@ -200,25 +204,27 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool checkAltTSS=false, bool intro
 
 
 bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking) {
- //returns true if b's intron chain (or single exon) is included in a
- if (b.exons.Count()>=a.exons.Count()) return false;
- if (b.exons.Count()==1) {
-    //check if b is contained in any of a's exons:
-    for (int i=0;i<a.exons.Count();i++) {
-       if (b.start>=a.exons[i]->start && b.end<=a.exons[i]->end) return true;
-       }
-    return false;
-    }
+  //returns true if b's intron chain (or single exon) is included in a
+  if (b.exons.Count()>=a.exons.Count()) return false;
+  // b must have fewer exons than a
+  if (b.exons.Count()==1) {
+	 if (cSETMerge) {
+		 //check if b is contained in any of a's exons:
+		 for (int i=0;i<a.exons.Count();i++) {
+			 if (b.start>=a.exons[i]->start && b.end<=a.exons[i]->end) return true;
+		 }
+	 }
+     return false;
+  }
 
- if (intronRedundant(a, b, keepAltTSS, intron_poking)) {
+  if (intronRedundant(a, b, keepAltTSS, intron_poking)) {
      //intronRedudant allows b's initial/terminal exons to extend beyond a's boundaries
      //but we don't allow this here *unless* user already relaxed the redundancy conditions!
      if (intron_poking) return true;
      else return (b.start>=a.start && b.end<=a.end);
     }
-  else return false;
- }
-
+   else return false;
+}
 
 int is_Redundant(GffObj*m, GList<GffObj>* mrnas, bool no5share=false, bool intron_poking=false) {
 	//first locate the list index of the mrnas starting just ABOVE m->end

@@ -20,9 +20,11 @@ extern bool qDupStrict;
 extern bool stricterMatching;
 extern int terminalMatchRange;
 extern bool noMergeCloseExons;
+extern bool cSETMerge;
 extern bool debug;
 extern bool reduceRefs;
 extern int tssDist;
+extern int intronStickingMax;
 
 //many input files, no accuracy stats are generated, no *.tmap
 // and exon attributes are discarded
@@ -1297,7 +1299,7 @@ class GXLocus:public GSeg {
   // returns  1 if a is the container of b
   //         -1 if a is contained in b
   //          0 if no
-  if (a->end<b->start || b->end<a->start) return 0;
+  if (a->end<b->start || b->end<a->start) return 0; //no overlap
   if (a->exons.Count()==b->exons.Count()) {
       if (a->exons.Count()>1) {
     	  /*if (((CTData*)a->uptr)->qset!=((CTData*)b->uptr)->qset)
@@ -1329,9 +1331,10 @@ class GXLocus:public GSeg {
            }
      }
    //different number of exons:
-   if (a->exons.Count()>b->exons.Count())
+   if (a->exons.Count()>b->exons.Count()) //a has more exons
 	    return t_contains(*a, *b, keepAltTSS, intron_poking) ?  1 : 0;
-   else return t_contains(*b, *a, keepAltTSS, intron_poking) ? -1 : 0;
+   else //b has more exons
+	   return t_contains(*b, *a, keepAltTSS, intron_poking) ? -1 : 0;
   }
  /*
  void addXCons(GXConsensus* t) {
