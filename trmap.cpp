@@ -305,11 +305,12 @@ void printNJTab(FILE* f, QJData& d) {
 
 }
 
-void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
+void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od, const char* tgene) {
 	if (!r) return;
 	const char* rgi=r->getGeneID(); if (rgi==NULL) rgi="";
 	const char* rgn=r->getGeneName(); if (rgn==NULL) rgn="";
-	fprintf(fwtab, "%s\t%c\t%s|%s|%s", tid, od.ovlcode, r->getID(), rgi ,rgn );
+	if (tgene==NULL) tgene="";
+	fprintf(fwtab, "%s|%s\t%c\t%s|%s|%s", tid, tgene, od.ovlcode, r->getID(), rgi ,rgn );
 	if (od.ovlen) {
 		float rcov= (100.00*od.ovlen)/r->covlen;
 		fprintf(fwtab, "\t%1.f\t", rcov);
@@ -363,7 +364,7 @@ void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od) {
 void printTabBest(FILE* fwtab, QJData& d) {
   if (d.refovls.Count()>0) {
 	  TRefOvl* ro=d.refovls.First();
-	  printOvlTab(fwtab, d.t->getID(), ro->ref, *(ro->od));
+	  printOvlTab(fwtab, d.t->getID(), ro->ref, *(ro->od), d.t->getGeneName());
   }
 }
 
@@ -498,7 +499,7 @@ int main(int argc, char* argv[]) {
 				} else { // no -J output
 					if (outRefOvlTab) {// -T or -t
 						if (tbest) tjd->add(r, od);
-						else printOvlTab(fwtab, t->getID(), r, od);
+						else printOvlTab(fwtab, t->getID(), r, od, t->getGeneName());
 					}
 					// could be default pseudo-fasta, or simpleOvl
 				    if (simpleOvl) { //-S output
