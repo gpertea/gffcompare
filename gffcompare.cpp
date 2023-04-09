@@ -257,7 +257,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;cset:gidnames;gnames;no-merge;strict-match;"
+		  "version;help;debug;gids;cset;gidnames;gnames;no-merge;strict-match;"
 		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
