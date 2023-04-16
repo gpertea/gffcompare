@@ -21,6 +21,8 @@ bool showCDS=false;
 bool outRefOvlTab=false;
 bool novelJTab=false;
 bool tbest=false;
+bool selfMap=false; // --self
+
 GStr fltCodes;
 
 struct GSTree {
@@ -29,10 +31,12 @@ struct GSTree {
 
 const char* USAGE =
 "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
-"  trmap [-c 'codes'] [-T | -J | -S] [-o <outfile>] <ref_gff> <query_gff>\n"
+"  trmap [-c 'codes'] [-T | -J | -S] <ref_gff> [<query_gff>|--self] \\n"
+"                    [-B] [-t <Tfile>] [-o <outfile>] "
 "Positional arguments:\n"
 "  <ref_gff>    reference annotation file name (GFF/BED format)\n"
 "  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
+"               can be omitted if --self is provided\n"
 "Options:\n"
 "  -o <outfile> write output to <outfile> instead of stdout\n"
 "  --show-cds   add CDS:start:end info to all transcripts with CDS\n"
@@ -50,10 +54,11 @@ const char* USAGE =
 "  -J           for each query transcript output a 6 column table\n"
 "                 queryID, chr:strand:exons, list of reference transcripts,\n"
 "                 num ref genes, list of gene names, list of novel junctions\n"
-"  -f <file>    for -J, report \"fusion\" query transcripts, i.e. transcripts\n"
-"               that overlaps multiple non-overlapping reference genes \n"
 "  -S           report only simple exon overlap percentage with any reference\n"
 "               transcripts (one line per query)\n";
+
+//"  -f <file>    for -J, report \"fusion\" query transcripts, i.e. transcripts\n"
+//"               that overlaps multiple non-overlapping reference genes \n"
 
 bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
  //this is called when a query overlaps a and b with the same overlap length
@@ -368,9 +373,20 @@ void printTabBest(FILE* fwtab, QJData& d) {
   }
 }
 
+int nextQi=0;
+GffObj* getNextQtx(GffReader* myQ, GPVec<GffObj> *refKeep) {
+  GffObj* t=NULL;
+  if (myQ) return myQ->readNext();
+  if (nextQi<refKeep->Count()) {
+	  t= refKeep->Get(nextQi);
+	  ++nextQi;
+  }
+  return t;
+}
+
 int main(int argc, char* argv[]) {
 	FILE* fwtab=NULL;
-	GArgs args(argc, argv, "help;strict-match;best;show-cds;hTBJSc:t:o:");
+	GArgs args(argc, argv, "help;strict-match;best;show-cds;self;hTBJSc:t:o:");
 	args.printError(USAGE, true);
 	if (args.getOpt('h') || args.getOpt("help")) {
 		GMessage(USAGE);
@@ -380,6 +396,7 @@ int main(int argc, char* argv[]) {
 	if (args.getOpt('S')) simpleOvl=true;
 	if (args.getOpt("strict-match")) stricterMatching=true;
 	if (args.getOpt("show-cds")) showCDS=true;
+	if (args.getOpt("self")) selfMap=true;
 	if (args.getOpt("best") || args.getOpt('B')) tbest=true;
 	if (args.getOpt('T')) outRefOvlTab=optT=true;
 	if (args.getOpt('J')) novelJTab=true;
@@ -403,8 +420,11 @@ int main(int argc, char* argv[]) {
 	GHash<GSTree*> map_trees; //map a ref sequence name to its own interval trees (3 per ref seq)
 
 	const char* o_file = args.getOpt('o') ? args.getOpt('o') : "-";
-
-	if (args.startNonOpt()!=2)
+    int pospar=args.startNonOpt();
+    if (selfMap) {
+    	if (pospar>1) GError("%s\nError: only one transcript file expected with --self!\n");
+    	if (pospar<1) GError("%s\nError: a transcript file is expected as input!\n");
+    } else if (pospar!=2)
 		GError("%s\nError: %d arguments provided (expected 2)\n",USAGE, args.startNonOpt());
 	const char* ref_file = args.nextNonOpt();
 	const char* q_file = args.nextNonOpt();
@@ -413,10 +433,11 @@ int main(int argc, char* argv[]) {
 	if (fr==NULL) GError("Error: could not open reference annotation file (%s)!\n", ref_file);
 
 	GffReader* myR=new GffReader(fr, true, true);
+	if (selfMap && (novelJTab || tbest)) myR->keepAttrs();
 	const char* fext=getFileExt(ref_file);
 	if (Gstricmp(fext, "bed")==0) myR->isBED();
 	GffObj* t=NULL;
-	GPVec<GffObj> *toFree = new GPVec<GffObj>(true);
+	GPVec<GffObj> *refKeep = new GPVec<GffObj>(true);
 	while ((t=myR->readNext())!=NULL) {
 		if (t->exons.Count()==0) {
 			delete t;
@@ -432,7 +453,7 @@ int main(int argc, char* argv[]) {
 		else if (t->strand=='-')
 			cTree->it[2].Insert(t);
 		else cTree->it[0].Insert(t);
-		toFree->Add(t);
+		refKeep->Add(t);
 	}
 	delete myR;
 	FILE* outFH=NULL;
@@ -444,25 +465,30 @@ int main(int argc, char* argv[]) {
 	if (outRefOvlTab && fwtab==NULL) fwtab=outFH;
 	FILE* fq=NULL;
 	fext=NULL;
-	if (strcmp(q_file,"-")==0) fq=stdin;
-	else {
-		fq=fopen(q_file, "r");
-		if (fq==NULL)
-			GError("Error: could not open query file (%s)!\n", q_file);
-		fext=getFileExt(q_file);
-	}
-	GffReader* myQ = new GffReader(fq, true, true);
-	if (novelJTab || tbest) myQ->keepAttrs();
-	if (fext && Gstricmp(fext, "bed")==0) myQ->isBED();
+	GffReader* myQ = NULL;
+	if (q_file!=NULL) {
+		if (strcmp(q_file,"-")==0) fq=stdin;
+		else {
+			fq=fopen(q_file, "r");
+			if (fq==NULL)
+				GError("Error: could not open query file (%s)!\n", q_file);
+			fext=getFileExt(q_file);
+
+			myQ = new GffReader(fq, true, true);
+			if (novelJTab || tbest) myQ->keepAttrs();
+			if (fext && Gstricmp(fext, "bed")==0) myQ->isBED();
+		}
+	} else if (!selfMap) GError("Error: --self required with only one input file!\n");
+
 	t=NULL;
-	while ((t=myQ->readNext())!=NULL) {
+	while ((t=getNextQtx(myQ, refKeep))!=NULL) {
 		const char* gseq=t->getGSeqName();
 		if (!map_trees.hasKey(gseq)) {
-			delete t;
+			if (!selfMap) delete t;
 			continue; //reference sequence not present in annotation, so we can't compare
 		}
 		if (t->exons.Count()==0) {
-			delete t;
+			if (!selfMap) delete t;
 			continue; //only work with properly defined transcripts
 		}
 		GVec<int> sidx;
@@ -485,6 +511,8 @@ int main(int argc, char* argv[]) {
 			bool qprinted=false;
 			for (int i=0; i<enu->Count(); ++i) { //for each range overlap
 				GffObj* r=(GffObj*)enu->Get(i);
+				if (selfMap && strcmp(r->getID(), t->getID())==0)
+					continue; // skip self matches
 				TOvlData od=getOvlData(*t, *r, stricterMatching);
 				//no real code found (?)
 				if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
@@ -548,10 +576,10 @@ int main(int argc, char* argv[]) {
 			}
 			delete tjd;
 		}
-		delete t;
+		if (!selfMap) delete t;
 	}
 	delete myQ;
-    delete toFree;
+    delete refKeep;
 	if (outFH!=stdout) fclose(outFH);
 	if (fwtab && fwtab!=stdout) fclose(fwtab);
 	return 0;
