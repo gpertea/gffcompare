@@ -31,9 +31,9 @@ struct GSTree {
 
 const char* USAGE =
 "trmap v" VERSION " : transcript to reference mapping and overlap classifier.\nUsage:\n"
-"  trmap [-c 'codes'] [-T | -J | -S] <ref_gff> [<query_gff>|--self] \\n"
+"  trmap [-c 'codes'] [-T | -J | -S] <ref_gff> [<query_gff>|--self] \n"
 "                    [-B] [-t <Tfile>] [-o <outfile>] "
-"Positional arguments:\n"
+"\nPositional arguments:\n"
 "  <ref_gff>    reference annotation file name (GFF/BED format)\n"
 "  <query_gff>  query file name (GFF/BED format) or \"-\" for stdin\n"
 "               can be omitted if --self is provided\n"
