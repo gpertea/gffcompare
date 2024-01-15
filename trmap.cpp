@@ -494,22 +494,13 @@ int main(int argc, char* argv[]) {
 			if (!selfMap) delete t;
 			continue; //only work with properly defined transcripts
 		}
-		GVec<int> sidx;
 		GSTree* cTree=map_trees[gseq];
-		sidx.cAdd(0); //always attempt to search the '.' strand
-		if (novelJTab || tbest) {
-			if (t->strand=='+') { sidx.cAdd(1); sidx.cAdd(2); }
-			else { sidx.cAdd(2); sidx.cAdd(1); }
-		} else {
-		  if (t->strand=='+') sidx.cAdd(1);
-		   else if (t->strand=='-') sidx.cAdd(2);
-		   else { sidx.cAdd(1); sidx.cAdd(2); }
-		}
+		//GVec<int> sidx;
+		// always search all strands
 		QJData* tjd=NULL;
-		//bool jfound=false;
 		if (novelJTab || tbest) tjd=new QJData(*t);
-		for (int k=0;k<sidx.Count();++k) {
-			GVec<GSeg*> *enu = cTree->it[sidx[k]].Enumerate(t->start, t->end);
+		for (int k=0;k<3;++k) {
+			GVec<GSeg*> *enu = cTree->it[k].Enumerate(t->start, t->end);
 			if(enu->Count()==0) { delete enu; continue; } // no overlaps found
 			bool qprinted=false;
 			for (int i=0; i<enu->Count(); ++i) { //for each range overlap
@@ -520,9 +511,10 @@ int main(int argc, char* argv[]) {
 				//no real code found (?)
 				if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
 					continue;
-				// opposite strand non-overlaps are ignored
-				if (t->strand!=r->strand && t->strand!='.' && classcode_rank(od.ovlcode)<classcode_rank('i'))
-					continue;
+				// opposite strand non-overlaps should be ignored ?
+				bool Xstrand=(t->strand!=r->strand && t->strand!='.' && r->strand!='.');
+				//bool novlXstrand = (Xstrand && classcode_rank(od.ovlcode)<classcode_rank('i'));
+				//if (novlXstrand) continue;
 				// -- two output modes: aggregating (best/sorted), or as-you-go, for each overlap
 				// novelJTab and tbest are aggregating
 				if (novelJTab || tbest) {
@@ -535,7 +527,7 @@ int main(int argc, char* argv[]) {
 				}
 				// could be default pseudo-fasta, or simpleOvl
 				if (simpleOvl) { //-S output
-						if (od.ovlen==0) continue;
+						if (Xstrand || od.ovlen==0) continue;
 						float rcov=(100.00*od.ovlen)/r->covlen;
 						if (!qprinted) {
 							fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
