@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
 	if ((int)outRefOvlTab + (int)simpleOvl+(int)novelJTab > 1)
 		GError("%s\nError: options -T, -J and -S are mutually exclusive!\n", USAGE);
 	const char* tfo=args.getOpt('t');
-	if (tfo) { //secondary -T output
+	if (tfo) { //secondary -t output
 		outRefOvlTab=true;
 		if (strcmp(tfo, "-")==0) fwtab=stdout;
 			          else {
@@ -413,6 +413,7 @@ int main(int argc, char* argv[]) {
 	}
 	if (tbest && !outRefOvlTab)
 		GError("%s\nError: option -B/--best requires -T or -t!\n", USAGE);
+	// tbest implies outRefOvlTab	
     const char*s=args.getOpt('c');
     if (s!=NULL) {
     	fltCodes=s;
@@ -522,15 +523,16 @@ int main(int argc, char* argv[]) {
 					continue;
 				// -- two output modes: aggregating (best/sorted), or as-you-go, for each overlap
 				// novelJTab and tbest are aggregating
-				if (novelJTab) {
+				if (novelJTab || tbest) {
 					tjd->add(r, od);
-				} else { // no -J output
-					if (outRefOvlTab) {// -T or -t
-						if (tbest) tjd->add(r, od);
-						else printOvlTab(fwtab, t->getID(), r, od, t->getGeneName());
-					}
-					// could be default pseudo-fasta, or simpleOvl
-				    if (simpleOvl) { //-S output
+				}
+
+				if (outRefOvlTab && !tbest) {// -T or -t, but not -B/--best
+						//if (tbest) tjd->add(r, od);else 
+						printOvlTab(fwtab, t->getID(), r, od, t->getGeneName());
+				}
+				// could be default pseudo-fasta, or simpleOvl
+				if (simpleOvl) { //-S output
 						if (od.ovlen==0) continue;
 						float rcov=(100.00*od.ovlen)/r->covlen;
 						if (!qprinted) {
@@ -539,8 +541,8 @@ int main(int argc, char* argv[]) {
 						}
 						//append each overlapping referenced to the same line
 						fprintf(outFH, "\t%s:%.1f", r->getID(), rcov);
-					} // -S output
-					else if (!optT) { //no -T, no -S => default pseudo-FASTA output
+				} // -S output
+				else if (!(optT || novelJTab)) { //no -T, -J or -S => default detailed pseudo-FASTA output
 						if (!qprinted) {
 							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 							t->printExonList(outFH);
@@ -561,10 +563,10 @@ int main(int argc, char* argv[]) {
 						}
 						fprintf(outFH, "\n");
 					} //default pseudo-FASTA output
-				} //no -J
+				//} //no -J
 			} //for each range overlap
 			if (simpleOvl && qprinted)
-			fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
+			      fprintf(outFH, "\n"); //for simpleOvl all overlaps are on a single line
 			delete enu;
 		} //for each searchable strand
 		if (tjd) {
@@ -581,6 +583,6 @@ int main(int argc, char* argv[]) {
 	delete myQ;
     delete refKeep;
 	if (outFH!=stdout) fclose(outFH);
-	if (fwtab && fwtab!=stdout) fclose(fwtab);
+	if (fwtab && fwtab!=outFH && fwtab!=stdout) fclose(fwtab);
 	return 0;
 }
