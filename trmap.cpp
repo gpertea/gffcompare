@@ -150,8 +150,11 @@ struct QJData {
 	    #ifndef NDEBUG
 		  if (jmd.size()!=od.jbits.size()) GError("Error: mismatching QJData bit vector size!\n");
 		#endif
-		jmd |= od.jbits;
-        inmd |= od.inbits;
+		bool sameStrand=(t->strand == ref->strand);
+		if (sameStrand) {
+		   jmd |= od.jbits;
+           inmd |= od.inbits;
+		}
 		int idx=refovls.Add(new TRefOvl(ref, od, t->exons.Count()));
 		#ifndef NDEBUG
 		  if (idx<0) {
@@ -257,7 +260,6 @@ void printNJTab(FILE* f, QJData& d) {
 		fprintf(f, "\n");
 		return;
 	}
-
 	GVec<char*> genes; //gene IDs
 	// for self mapping, add own gene name
 	if (selfMap) geneAdd(genes, d.t->getGeneName());
@@ -269,7 +271,7 @@ void printNJTab(FILE* f, QJData& d) {
 		if (g) {
 			fprintf(f, "%s", g);
 			if (d.refovls[i]->rank<CLASSCODE_OVL_RANK)
-			    geneAdd(genes, g); //only count actually overlapping genes
+			    geneAdd(genes, g); //only count actually overlapping
 		} else fprintf(f, ".");
 	}
 	//fprintf(f, "\t%d\t", genes.Count());
@@ -507,12 +509,20 @@ int main(int argc, char* argv[]) {
 				GffObj* r=(GffObj*)enu->Get(i);
 				if (selfMap && strcmp(r->getID(), t->getID())==0)
 					continue; // skip self matches
+				if (strcmp(t->getID(), "CHS.166002.3")==0) 
+				  GMessage("checking CHS.166002.3\n");
+
 				TOvlData od=getOvlData(*t, *r, stricterMatching);
+				// opposite strand non-overlaps should be ignored ?
+				bool Xstrand=(t->strand!=r->strand && t->strand!='.' && r->strand!='.');
+				if (Xstrand && classcode_rank(od.ovlcode)<CLASSCODE_OVL_RANK) {
+					//for trmap, mark these as non-overlaps, with code 'x'
+					od.ovlcode='x';
+					od.ovlen=0;
+				}
 				//no real code found (?)
 				if (!fltCodes.is_empty() && !fltCodes.contains(od.ovlcode))
 					continue;
-				// opposite strand non-overlaps should be ignored ?
-				bool Xstrand=(t->strand!=r->strand && t->strand!='.' && r->strand!='.');
 				//bool novlXstrand = (Xstrand && classcode_rank(od.ovlcode)<classcode_rank('i'));
 				//if (novlXstrand) continue;
 				// -- two output modes: aggregating (best/sorted), or as-you-go, for each overlap

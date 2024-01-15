@@ -9,7 +9,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}\\trmap",
-        "args": ["-t", "o.tmap", "-o", "o.jtab", "-J", "examples/annotation.gff", "examples/transcripts.gtf"],
+        "args": ["-t", "o.tmap", "-t", "cbovs21.tbmap", "-J", "c301_c21.gtf", "cbo_beta1_c21.gtf"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],
