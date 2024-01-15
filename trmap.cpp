@@ -259,6 +259,8 @@ void printNJTab(FILE* f, QJData& d) {
 	}
 
 	GVec<char*> genes; //gene IDs
+	// for self mapping, add own gene name
+	if (selfMap) geneAdd(genes, d.t->getGeneName());
 	for (int i=0;i<d.refovls.Count();++i) {
 		char* g=d.refovls[i]->ref->getGeneName();
 		if (g==NULL) g=d.refovls[i]->ref->getGeneID();
