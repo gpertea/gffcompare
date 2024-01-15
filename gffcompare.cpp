@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.12.8"
+#define VERSION "0.12.9"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -125,6 +125,7 @@ int outConsCount=0;
 int polyrun_range=2000; //polymerase run range 2KB
 double scoreThreshold=0;
 char* cprefix=NULL;
+bool tprefix_req=false;
 FILE* ffasta=NULL; //genomic seq file
 FILE *f_ref=NULL; //reference mRNA GFF, if provided
 FILE* f_in=NULL; //sequentially, each input GFF file
@@ -338,8 +339,10 @@ int main(int argc, char* argv[]) {
   //s=args.getOpt('c');
   //if (!s.is_empty()) scoreThreshold=s.asReal();
   s=args.getOpt('p');
-  if (!s.is_empty()) cprefix=Gstrdup(s.chars());
-               else  cprefix=Gstrdup("TCONS");
+  if (!s.is_empty()) {
+      cprefix=Gstrdup(s.chars());
+      tprefix_req=true;
+    }  else  cprefix=Gstrdup("TCONS");
   s=args.getOpt('e');
   if (!s.is_empty())
 	  exonEndRange=s.asInt();
@@ -471,7 +474,8 @@ int main(int argc, char* argv[]) {
 		  GMALLOC(rtfiles, numQryFiles*sizeof(FILE*));
 	  }
   }
-  gffAnnotate=(numQryFiles==1 && !discardContained && haveRefs && !qDupDiscard && !qDupStrict);
+  gffAnnotate=(numQryFiles==1 && !discardContained && haveRefs && !qDupDiscard 
+                              && !qDupStrict && !tprefix_req);
   consGTF=outbasename;
   if (gffAnnotate) consGTF.append(".annotated.gtf");
               else consGTF.append(".combined.gtf");
@@ -1043,15 +1047,6 @@ class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
      //check if it can be added to existing xconsensi
      uint nfend=0;
      uint nfstart=0;
-     /*
-     if (tsscl.Get(0)->tcons->getGeneID()!=NULL &&
-             c->tcons->getGeneID()!=NULL &&
-            strcmp(tsscl.Get(0)->tcons->getGeneID(), c->tcons->getGeneID()))
-        //don't tss cluster if they don't have the same GeneID (?)
-        //CHECKME: we might not want this if input files are not from Cufflinks
-        //       and they could simply lack proper GeneID
-          return false;
-      */
      if (c->tcons->strand=='-') {
         //no, the first exons don't have to overlap
         //if (!c->tcons->exons.Last()->overlap(fstart,fend)) return false;
@@ -1089,58 +1084,18 @@ class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
      if (end<cl.end) end=cl.end;
      }
 };
-/*
-class IntArray { //two dimensional int array
-    int* mem;
-    int xsize;
-    int ysize;
-  public:
-   IntArray(int xlen, int ylen) {
-     xsize=xlen;
-     ysize=ylen;
-     GMALLOC(mem, xsize*ysize*sizeof(int));
-     }
-   ~IntArray() {
-     GFREE(mem);
-     }
-   int& data(int x, int y) {
-    return mem[y*xsize+x];
-    }
-};
 
-int aa_diff(GXConsensus* c1, GXConsensus* c2) {
- int diflen=abs(c1->aalen-c2->aalen);
- if (diflen>=6) return diflen;
- //obvious case: same CDS
- if (diflen==0 && strcmp(c1->aa, c2->aa)==0) return 0;
- //simple edit distance calculation
- IntArray dist(c1->aalen+1, c2->aalen+1);
- for (int i=0;i<=c1->aalen;i++) {
-     dist.data(i,0) = i;
-     }
- for (int j = 0; j <= c2->aalen; j++) {
-     dist.data(0,j) = j;
-     }
- for (int i = 1; i <= c1->aalen; i++)
-     for (int j = 1; j <= c2->aalen; j++) {
-         dist.data(i,j) = GMIN3( dist.data(i-1,j)+1,
-             dist.data(i,j-1)+1,
-                 dist.data(i-1,j-1)+((c1->aa[i-1] == c2->aa[j-1]) ? 0 : 1) );
-         }
- int r=dist.data(c1->aalen,c2->aalen);
- return r;
-}
-*/
 void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
  GStr t_id, g_id, xloc;
  GStr gene_name(xc->tcons->getGeneName());//always preserve original gene_name if present
  if (gffAnnotate) {
+  //preserve original t_id and g_id if present
 	 t_id=xc->tcons->getID();
 	 g_id=xc->tcons->getGeneID();
 	 if (g_id.is_empty()) g_id.appendfmt("XLOC_%06d",xlocnum);
-	 else xloc.appendfmt("XLOC_%06d",xlocnum);
+	 else xloc.appendfmt("XLOC_%06d",xlocnum); //xloc tag only added if no gene_id present
  }
-  else {
+  else { //override t_id and g_id with cprefix and XLOC ID
  	 t_id.appendfmt("%s_%08d",cprefix, xc->id);
 	 g_id.appendfmt("XLOC_%06d",xlocnum);
  }
@@ -1150,8 +1105,8 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
      t_id.chars(), g_id.chars());
  GStr ref_gene_name;
  GStr ref_gene_id;
- if (gene_name.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<15) {
-	//TODO: what if we want to override existing one?
+	//TODO: option to override gene_name and gene_id with those from reference
+ if (gene_name.is_empty() && xc->ref!=NULL && xc->refcode>0 && classcode_rank(xc->refcode)<CLASSCODE_OVL_RANK) {
     ref_gene_name=xc->ref->getGeneName();//get the gene name from this overlapping reference
     if (ref_gene_name.is_empty())
     	ref_gene_name=xc->ref->getGeneID(); //last resort: use reference gene ID (might be meaningless!)
@@ -2572,9 +2527,9 @@ void trackGData(int qcount, GList<GSeqTrack>& gtracks, GStr& fbasename, FILE** f
          }
     //print XLoci and XConsensi within each xlocus
     //also TSS clustering assignment for XConsensi
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, fredundant); //faseq, fredundant);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, fredundant); //faseq, fredundant);
-    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, fredundant); //faseq, fredundant);
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_f, fredundant); 
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_r, fredundant); 
+    printXLoci(f_xloci, f_ctrack, qcount, gseqtrack.xloci_u, fredundant); 
     if (tmapFiles && haveRefs) {
       printRefMap(frs, qcount, gseqtrack.rloci_f);
       printRefMap(frs, qcount, gseqtrack.rloci_r);
