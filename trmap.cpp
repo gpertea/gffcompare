@@ -509,9 +509,6 @@ int main(int argc, char* argv[]) {
 				GffObj* r=(GffObj*)enu->Get(i);
 				if (selfMap && strcmp(r->getID(), t->getID())==0)
 					continue; // skip self matches
-				if (strcmp(t->getID(), "CHS.166002.3")==0) 
-				  GMessage("checking CHS.166002.3\n");
-
 				TOvlData od=getOvlData(*t, *r, stricterMatching);
 				// opposite strand non-overlaps should be ignored ?
 				bool Xstrand=(t->strand!=r->strand && t->strand!='.' && r->strand!='.');
