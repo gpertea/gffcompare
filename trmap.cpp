@@ -17,6 +17,7 @@
 
 bool simpleOvl=false;
 bool stricterMatching=false;
+bool cdsMatching=false;
 bool showCDS=false;
 bool outRefOvlTab=false;
 bool novelJTab=false;
@@ -509,7 +510,7 @@ int main(int argc, char* argv[]) {
 				GffObj* r=(GffObj*)enu->Get(i);
 				if (selfMap && strcmp(r->getID(), t->getID())==0)
 					continue; // skip self matches
-				TOvlData od=getOvlData(*t, *r, stricterMatching);
+				TOvlData od=getOvlData(*t, *r, stricterMatching, 1, cdsMatching);
 				// opposite strand non-overlaps should be ignored ?
 				bool Xstrand=(t->strand!=r->strand && t->strand!='.' && r->strand!='.');
 				if (Xstrand && classcode_rank(od.ovlcode)<CLASSCODE_OVL_RANK) {

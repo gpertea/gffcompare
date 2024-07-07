@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;cset;gidnames;gnames;no-merge;strict-match;"
+		  "version;help;debug;gids;cset;gidnames;gnames;no-merge;strict-match;cds-match;"
 		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
@@ -285,6 +285,7 @@ int main(int argc, char* argv[]) {
   qDupStrict=(args.getOpt('S')!=NULL);
   stricterMatching=(args.getOpt("strict-match")!=NULL);
   //if (stricterMatching) exonEndRange=0;
+  cdsMatching = (args.getOpt("cds-match") != NULL);
   noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
@@ -1676,49 +1677,67 @@ GSeqTrack* findGSeqTrack(int gsid) {
   return gseqtracks[fidx];
 }
 
-GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
- ovlen=0;
- CTData* mdata=((CTData*)m.uptr);
- if (mdata->eqref!=NULL && ((CTData*)(mdata->eqref->uptr))->locus==&rloc) {
-	  if (mdata->eqref!=mdata->ovls.First()->mrna) {
-		  GMessage("Warning: previously matching ref (%s) not the best overlap for %s (which is %s)\n",
-				  mdata->eqref->getID(), m.getID(), mdata->ovls.First()->mrna->getID());
-		  mdata->eqref=mdata->ovls.First()->mrna;
-	  }
-
-      return mdata->eqref;
- }
- //if (rloc==NULL|| m==NULL) return NULL;
- GffObj* ret=NULL;
- for (int r=0;r<rloc.mrnas.Count();r++) {
-    int olen=0;
-    char eqcode=0;
-	if ((eqcode=transcriptMatch(m, *(rloc.mrnas[r]),olen))>0) {
-	  /*
-	  if (ovlen<olen) {
-		  ovlen=olen;
-		  ret=rloc.mrnas[r]; //keep the longest matching ref
-			 //but this is unnecessary, there can be only one matching ref
-			 // because duplicate refs were discarded
-		  }
-	  */
-	  //for class code output, '~' should be shown as '=' unless strict matching was requested!
-	  if (eqcode=='~' && !stricterMatching) { eqcode='='; olen--; }
-	  mdata->addOvl(eqcode,rloc.mrnas[r], olen);
-      //this must be called only for the head of an equivalency chain
-      CTData* rdata=(CTData*)rloc.mrnas[r]->uptr;
-      rdata->addOvl(eqcode,&m,olen);
-      //if (rdata->eqnext==NULL) rdata->eqnext=&m;
-      }
+GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
+{
+  ovlen = 0;
+  CTData *mdata = ((CTData *)m.uptr);
+  if (mdata->eqref != NULL && ((CTData *)(mdata->eqref->uptr))->locus == &rloc)
+  {
+    if (mdata->eqref != mdata->ovls.First()->mrna)
+    {
+      GMessage("Warning: previously matching ref (%s) not the best overlap for %s (which is %s)\n",
+               mdata->eqref->getID(), m.getID(), mdata->ovls.First()->mrna->getID());
+      mdata->eqref = mdata->ovls.First()->mrna;
     }
- if (mdata->ovls.Count()>0 && mdata->ovls.First()->code=='=') {
-   ret=mdata->ovls.First()->mrna;
-   ovlen=mdata->ovls.First()->ovlen;
- }
- //
- if (ret!=NULL)
-   mdata->eqref=ret;
- return ret;
+
+    return mdata->eqref;
+  }
+  // if (rloc==NULL|| m==NULL) return NULL;
+  GffObj *ret = NULL;
+  for (int r = 0; r < rloc.mrnas.Count(); r++)
+  {
+    int olen = 0;
+    char eqcode = 0;
+    if ((eqcode = transcriptMatch(m, *(rloc.mrnas[r]), olen)) > 0)
+    {
+      /*
+      if (ovlen<olen) {
+        ovlen=olen;
+        ret=rloc.mrnas[r]; //keep the longest matching ref
+         //but this is unnecessary, there can be only one matching ref
+         // because duplicate refs were discarded
+        }
+      */
+      eqcode = (eqcode == ':' && !cdsMatching) ? '=' : eqcode;
+      eqcode = (eqcode == '_' && !cdsMatching) ? '~' : eqcode;
+      // for class code output, '~' should be shown as '=' (and '_' as '-') unless strict matching was requested!
+      if (eqcode == '~' && !stricterMatching)
+      {
+        eqcode = '=';
+        olen--;
+      }
+      if (eqcode == '_' && !stricterMatching)
+      {
+        eqcode = ':';
+        olen--;
+      }
+
+      mdata->addOvl(eqcode, rloc.mrnas[r], olen);
+      // this must be called only for the head of an equivalency chain
+      CTData *rdata = (CTData *)rloc.mrnas[r]->uptr;
+      rdata->addOvl(eqcode, &m, olen);
+      // if (rdata->eqnext==NULL) rdata->eqnext=&m;
+    }
+  }
+  if (mdata->ovls.Count() > 0 && mdata->ovls.First()->code == '=')
+  {
+    ret = mdata->ovls.First()->mrna;
+    ovlen = mdata->ovls.First()->ovlen;
+  }
+  //
+  if (ret != NULL)
+    mdata->eqref = ret;
+  return ret;
 }
 
 
