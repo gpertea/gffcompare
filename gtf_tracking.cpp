@@ -9,6 +9,7 @@ bool reduceRefs=false; //-R
 
 bool qDupStrict=false;
 bool stricterMatching=false;
+bool cdsMatching=false;
 bool cSETMerge=false;
 int terminalMatchRange=0;
 bool noMergeCloseExons=false;
@@ -559,11 +560,11 @@ void gatherRefLocOvls(GffObj& m, GLocus& rloc) {
 	}
 	for (int i=0;i<rloc.mrnas.Count();i++) {
 		GffObj* r=rloc.mrnas[i];
-		TOvlData ovld=getOvlData(m,*r, stricterMatching);
+		TOvlData ovld=getOvlData(m,*r, stricterMatching, 1, cdsMatching);
 		if (ovld.ovlcode!=0) { //has some sort of overlap with r
 			((CTData*)m.uptr)->addOvl(ovld,r);
 			//if (classcode_rank(olen>ovlen) { ovlen=olen; rovl=r; }
-			if (ovld.ovlcode=='c' || ovld.ovlcode=='=' || ovld.ovlcode=='~') //keep match/containment for each reference transcript
+			if (ovld.ovlcode=='c' || ovld.ovlcode=='=' || ovld.ovlcode=='~' || ovld.ovlcode==':' || ovld.ovlcode=='_') //keep match/containment for each reference transcript
 				((CTData*)r->uptr)->addOvl(ovld, &m);
 		}
 	}//for each ref in rloc

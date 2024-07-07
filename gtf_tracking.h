@@ -18,6 +18,7 @@ extern bool gtf_tracking_verbose;
 extern bool gtf_tracking_largeScale;
 extern bool qDupStrict;
 extern bool stricterMatching;
+extern bool cdsMatching;
 extern int terminalMatchRange;
 extern bool noMergeCloseExons;
 extern bool cSETMerge;
