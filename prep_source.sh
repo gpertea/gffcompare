@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 ver=$(fgrep '#define VERSION ' gffcompare.cpp)
 ver=${ver#*\"}
 ver=${ver%%\"*}
