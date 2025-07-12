@@ -3,7 +3,7 @@
 #include <errno.h>
 #include "gtf_tracking.h"
 
-#define VERSION "0.12.9"
+#define VERSION "0.12.10"
 
 #define USAGE "Usage:\n\
 gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
@@ -58,6 +58,9 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     for terminal exons; code '=' is only assigned if transcript ends are\n\
     within that range, otherwise code '~' is assigned just for intron chain\n\
     match (or significant overlap in the case of single exon transcripts)\n\
+ --cds-match perform validation of CDS chain matching, for `=` and `~` cases\n\
+   this adds new classification codes ':' and '_' which replace '=' and '~' \n\
+   when no matching CDS is found with this option activated\n\
 \n\
  -d max. distance (range) for grouping transcript start sites (100)\n\
  -V verbose processing mode (also shows GFF parser warnings)\n\
