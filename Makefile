@@ -1,4 +1,4 @@
-GCLIB := $(if $(GCLIB),$(GCLIB),../gclib)
+GCLIB := $(if $(GCLIB),$(GCLIB),./gclib)
 
 INCDIRS := -I${GCLIB}
 
@@ -55,10 +55,10 @@ OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
  ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
 .PHONY : all
-all debug release static memcheck memdebug : ../gclib gffcompare trmap
+all debug release static memcheck memdebug : ./gclib gffcompare trmap
 
-../gclib:
-	git clone https://github.com/gpertea/gclib.git ../gclib
+./gclib:
+	git clone https://github.com/gpertea/gclib.git ./gclib
 
 ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
