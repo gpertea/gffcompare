@@ -5,16 +5,11 @@ ver=${ver%%\"*}
 pack=gffcompare-$ver
 echo " preparing source $pack.tar.gz"
 echo "------------------------------------"
-/bin/rm -rf $pack
-/bin/rm -f $pack.tar.gz
-mkdir $pack
-mkdir $pack/gclib
-libdir=$pack/gclib/
-cp LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} \
- trmap.cpp $pack/
-sed 's|\.\./gclib|./gclib|' Makefile > $pack/Makefile
-cp ../gclib/{GVec,GList,GIntervalTree,GHashMap,khashl}.hh ../gclib/xxhash.h ../gclib/wyhash.h ../gclib/GBitVec.h $libdir
-cp ../gclib/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $libdir
+/bin/rm -rf $pack $pack.tar.gz
+mkdir -p $pack/gclib
+cp Makefile LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} trmap.cpp $pack/
+GCL=./gclib
+cp -p $GCL/{GVec,GList,GIntervalTree,GHashMap,khashl}.hh $GCL/{xxhash,wyhash,GBitVec}.h $pack/gclib/
+cp -p $GCL/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $pack/gclib/
 tar cvfz $pack.tar.gz $pack
 ls -l $pack.tar.gz
-
