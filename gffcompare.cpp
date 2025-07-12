@@ -42,7 +42,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transcripts from the same sample if their boundaries are fully contained \n\
     within (or same with) matching transcripts\n\
     if --strict-match is also given, exact match of all exons is required\n\
- --no-merge : disable close-exon merging (default: merge exons separated by\n\
+ --no-exon-merge : disable close-exon merging (default: merge exons separated by\n\
    \"introns\" shorter than 5 bases\n\
  --merge : merge highly similar transcripts based on reciprocal overlap\n\
     the amount of overlap can be controlled using the theshold-overlap parameter -t;\n\
@@ -267,7 +267,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;cset;gidnames;gnames;no-merge;strict-match;cds-match;"
+		  "version;help;debug;gids;cset;gidnames;gnames;no-exon-merge;strict-match;cds-match;"
 		  "chr-stats;merge;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:t:");
   int e;
   if ((e=args.isError())>0) {
@@ -295,7 +295,7 @@ int main(int argc, char* argv[]) {
   stricterMatching=(args.getOpt("strict-match")!=NULL);
   //if (stricterMatching) exonEndRange=0;
   cdsMatching = (args.getOpt("cds-match") != NULL);
-  noMergeCloseExons=(args.getOpt("no-merge")!=NULL);
+  noMergeCloseExons=(args.getOpt("no-exon-merge")!=NULL);
   mergeSimilar = (args.getOpt("merge") != NULL);
   GStr t_overlap = args.getOpt("t");
   if (!t_overlap.is_empty())
