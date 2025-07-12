@@ -3274,15 +3274,12 @@ char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange)
 	// check intron overlaps
 	ovlen = a.exons[0]->end - (GMAX(a.start, b.start)) + 1;
 	ovlen += (GMIN(a.end, b.end)) - a.exons.Last()->start;
-	for (int i = 1; i <= imax; i++)
-	{
+	for (int i = 1; i <= imax; i++) {
 		if (i < imax)
 			ovlen += a.exons[i]->len();
 		if ((a.exons[i - 1]->end != b.exons[i - 1]->end) ||
 			(a.exons[i]->start != b.exons[i]->start))
-		{
 			return 0; // intron mismatch
-		}
 	}
 	//--- full intron chain match
 	char result = 0;
@@ -3294,18 +3291,10 @@ char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange)
 		result = '~';
 
 	bool cdsEndsMatch = a.CDstart == b.CDstart && a.CDend == b.CDend;
-	if (!cdsEndsMatch)
-	{
-		if (result == '=')
-		{
-			result = ':';
-		}
-		else if (result == '~')
-		{
-			result = '_';
-		}
+	if (!cdsEndsMatch) {
+		if (result == '=') result = ':';
+		else if (result == '~') result = '_';
 	}
-
 	return result;
 }
 
@@ -3350,8 +3339,7 @@ char singleExonTMatch(GffObj &m, GffObj &r, int &ovlen, int trange, int *ovlrefs
 	//  return 0 if there is no overlap
 	GSeg mseg(m.start, m.end);
 	ovlen = mseg.overlapLen(r.start, r.end, ovlrefstart);
-	if (ovlen <= 0)
-		return 0;
+	if (ovlen <= 0) return 0;
 	// fuzzy matching for single-exon transcripts:
 	// matching = overlap is at least 80% of the length of the longer transcript
 	// *OR* in case of reverse containment (reference contained in m)
@@ -3360,34 +3348,20 @@ char singleExonTMatch(GffObj &m, GffObj &r, int &ovlen, int trange, int *ovlrefs
 	char result = 0;
 	if (abs((int)m.start - (int)r.start) <= trange && abs((int)m.end - (int)r.end) <= trange)
 		result = '=';
-	if (m.covlen > r.covlen)
-	{
+	if (m.covlen > r.covlen) {
 		if ((ovlen >= m.covlen * 0.8) ||
 			(ovlen >= r.covlen * 0.8 && ovlen >= m.covlen * 0.7))
 			// allow also some fuzzy reverse containment
 			result = '~';
-	}
-	else
-	{
-		if (ovlen >= r.covlen * 0.8)
-			result = '~';
-	}
-
+	} else 
+		if (ovlen >= r.covlen * 0.8) result = '~';
 	// check if CDS chains match and modify result accordingly
 	bool cdsEndsMatch = r.CDstart == m.CDstart && r.CDend == m.CDend;
-	if (!cdsEndsMatch)
-	{
-		if (result == '=')
-		{
-			result = ':';
-		}
-		else if (result == '~')
-		{
-			result = '_';
-		}
+	if (!cdsEndsMatch) {
+		if (result == '=') result = ':';
+		else if (result == '~') result = '_';
 	}
-
-	return 0;
+	return result;
 }
 
 //NOTE: getOvlData() does not check the strands of the transcripts
