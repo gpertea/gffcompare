@@ -24,7 +24,7 @@ cd tests/wrk
 
 ## test 1 : self-matching check
 echo "=== Running test #1"
-../../gffcompare -T ../in/self-match.gtf -r ../in/self-match.gtf -o selfm >& /dev/null
+../../gffcompare -T ../in/ref_cds.gtf -r ../in/ref_cds.gtf -o selfm >& /dev/null
 fexp=../expected_out/selfm.stats
 fout=selfm.stats
 if diff -q -I '^#' $fout $fexp &>/dev/null; then

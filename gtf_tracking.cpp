@@ -697,21 +697,26 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
       HeapProfilerDump("post_readAll");
 #endif
     //if (!isRefData && gtf_tracking_verbose)
-	if (isRefData)
+    if (gtf_tracking_verbose) {
+	if (isRefData) {
 		GMessage("  %d reference transcripts loaded.\n", gffr->gflst.Count());
+        }
 	else
 		if (!gtf_tracking_largeScale)
 			GMessage("  %d query transfrags loaded.\n", gffr->gflst.Count());
+    }
     int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, discardDups, qfidx,
     		             only_multiexon);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_parse_mRNAs");
 #endif
-	if (d>0) { //(gtf_tracking_verbose && d>0)
-	  if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
-	            else GMessage("  %d duplicate query transfrags discarded.\n",d);
-	}
+    if (gtf_tracking_verbose) {
+      if (d>0) { //(gtf_tracking_verbose && d>0)
+        if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
+                  else GMessage("  %d duplicate query transfrags discarded.\n",d);
+      }
+    }
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs
 #ifdef HEAPROFILE
