@@ -58,7 +58,7 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     for terminal exons; code '=' is only assigned if transcript ends are\n\
     within that range, otherwise code '~' is assigned just for intron chain\n\
     match (or significant overlap in the case of single exon transcripts)\n\
- --cds-match perform validation of CDS chain matching, for `=` and `~` cases\n\
+ --cds-match : perform validation of CDS chain matching, for `=` and `~` cases\n\
    this adds new classification codes ':' and '_' which replace '=' and '~' \n\
    when no matching CDS is found with this option activated\n\
 \n\
@@ -847,7 +847,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 		  GLocus* rlocus=((CTData*)super->rmrnas[j]->uptr)->locus;
 		  int ovlen=0;
 		  //look for a transcript match ('=' code for full exact exons match, '~' )
-		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, terminalMatchRange);
+		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, terminalMatchRange, cdsMatching);
 		  //bool isTMatch=(tmatch>0);
 		  if (tmatch) {
 			  if (!stricterMatching) tmatch='=';
@@ -1701,7 +1701,7 @@ GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
   {
     int olen = 0;
     char eqcode = 0;
-    if ((eqcode = transcriptMatch(m, *(rloc.mrnas[r]), olen)) > 0)
+    if ((eqcode = transcriptMatch(m, *(rloc.mrnas[r]), olen, 0, cdsMatching)) > 0)
     {
       /*
       if (ovlen<olen) {
@@ -1711,16 +1711,14 @@ GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
          // because duplicate refs were discarded
         }
       */
-      eqcode = (eqcode == ':' && !cdsMatching) ? '=' : eqcode;
-      eqcode = (eqcode == '_' && !cdsMatching) ? '~' : eqcode;
+      //eqcode = (eqcode == ':' && !cdsMatching) ? '=' : eqcode;
+      //eqcode = (eqcode == '_' && !cdsMatching) ? '~' : eqcode;
       // for class code output, '~' should be shown as '=' (and '_' as '-') unless strict matching was requested!
-      if (eqcode == '~' && !stricterMatching)
-      {
+      if (eqcode == '~' && !stricterMatching) {
         eqcode = '=';
         olen--;
       }
-      if (eqcode == '_' && !stricterMatching)
-      {
+      if (cdsMatching && eqcode == '_' && !stricterMatching) {
         eqcode = ':';
         olen--;
       }
@@ -1732,8 +1730,7 @@ GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
       // if (rdata->eqnext==NULL) rdata->eqnext=&m;
     }
   }
-  if (mdata->ovls.Count() > 0 && mdata->ovls.First()->code == '=')
-  {
+  if (mdata->ovls.Count() > 0 && mdata->ovls.First()->code == '=') {
     ret = mdata->ovls.First()->mrna;
     ovlen = mdata->ovls.First()->ovlen;
   }
@@ -1768,7 +1765,7 @@ void findTMatches(GTrackLocus& loctrack, int qcount) {
 					CTData* ni_d=(CTData*)ni_t->uptr;
 					if (ni_d->eqlist!=NULL && ni_d->eqlist==qi_d->eqlist) continue;
 					int ovlen=0;
-					if (transcriptMatch(*qi_t, *ni_t, ovlen)>0) {
+					if (transcriptMatch(*qi_t, *ni_t, ovlen, 0, cdsMatching)>0) {
 						CEqMatch m(ni_t, tMatchScore(ovlen, ni_t, qi_t));
 						eqmatches.Add(&m);
 					}

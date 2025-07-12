@@ -3255,7 +3255,7 @@ void GffObj::getCDSegs(GVec<GffExon>& cds) {
 //-- transcript match/overlap classification functions
 
 
-char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange)
+char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange, bool cdsMatch)
 {
 	// return '=' if exact exon match or transcripts ends are within tdelta distance
 	//  '~' if intron-chain match (or 80% overlap, for single-exon)
@@ -3266,8 +3266,8 @@ char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange)
 	ovlen = 0;
 	if (imax != jmax)
 		return false; // different number of exons, cannot match
-	if (imax == 0)	  // single-exon mRNAs
-		return (singleExonTMatch(a, b, ovlen, trange));
+	if (imax == 0) // single-exon mRNAs
+		return (singleExonTMatch(a, b, ovlen, trange, NULL, cdsMatch));
 	if (a.exons[imax]->start < b.exons[0]->end ||
 		b.exons[jmax]->start < a.exons[0]->end)
 		return 0; // intron chains do not overlap at all
@@ -3286,10 +3286,9 @@ char transcriptMatch(GffObj &a, GffObj &b, int &ovlen, int trange)
 	// check if it's an exact
 	if (abs((int)a.exons[0]->start - (int)b.exons[0]->start) <= trange &&
 		abs((int)a.exons.Last()->end - (int)b.exons.Last()->end) <= trange)
-		result = '=';
-	else
-		result = '~';
-
+		  result = '=';
+	else  result = '~';
+	if (!cdsMatch) return result;
 	bool cdsEndsMatch = a.CDstart == b.CDstart && a.CDend == b.CDend;
 	if (!cdsEndsMatch) {
 		if (result == '=') result = ':';
@@ -3331,8 +3330,7 @@ bool txStructureMatch(GffObj& a, GffObj& b, double SE_tolerance, int ME_range) {
     return false; // Default case: no match
 }
 
-char singleExonTMatch(GffObj &m, GffObj &r, int &ovlen, int trange, int *ovlrefstart)
-{
+char singleExonTMatch(GffObj &m, GffObj &r, int &ovlen, int trange, int *ovlrefstart, bool cdsMatch) {
 	// return '=' if boundaries match within tdelta distance,
 	//   or '~' if the overlap is >=80% of the longer sequence length
 	//  ':' and '_' respectively if CDS chains do not match but otherwise would be '=' or '~'
@@ -3348,14 +3346,20 @@ char singleExonTMatch(GffObj &m, GffObj &r, int &ovlen, int trange, int *ovlrefs
 	char result = 0;
 	if (abs((int)m.start - (int)r.start) <= trange && abs((int)m.end - (int)r.end) <= trange)
 		result = '=';
-	if (m.covlen > r.covlen) {
-		if ((ovlen >= m.covlen * 0.8) ||
-			(ovlen >= r.covlen * 0.8 && ovlen >= m.covlen * 0.7))
-			// allow also some fuzzy reverse containment
-			result = '~';
-	} else 
-		if (ovlen >= r.covlen * 0.8) result = '~';
+	else {
+	  if (m.covlen > r.covlen) {
+		  if ((ovlen >= m.covlen * 0.8) ||
+			  (ovlen >= r.covlen * 0.8 && ovlen >= m.covlen * 0.7))
+			  // allow also some fuzzy reverse containment
+			    result = '~';
+			  else return 0;
+	  } else {
+		  if (ovlen >= r.covlen * 0.8) result = '~';
+			 else return 0;
+	  }
+	}
 	// check if CDS chains match and modify result accordingly
+	if (!cdsMatch) return result;
 	bool cdsEndsMatch = r.CDstart == m.CDstart && r.CDend == m.CDend;
 	if (!cdsEndsMatch) {
 		if (result == '=') result = ':';
@@ -3378,7 +3382,7 @@ TOvlData getOvlData(GffObj &m, GffObj &r, bool stricterMatch, int trange, bool c
 		if (jmax == 0)
 		{ // also single-exon ref
 			char eqcode = 0;
-			if ((eqcode = singleExonTMatch(m, r, odta.ovlen, trange, &odta.ovlRefstart)) > 0)
+			if ((eqcode = singleExonTMatch(m, r, odta.ovlen, trange, &odta.ovlRefstart, cdsMatch)) > 0)
 			{
 				odta.ovlcode = (stricterMatch) ? eqcode : '=';
 				return odta;
