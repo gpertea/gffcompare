@@ -1,0 +1,8 @@
+# Build artifacts
+*.o
+gffcompare
+trmap
+gclib/
+
+# Test output
+tests/wrk/
