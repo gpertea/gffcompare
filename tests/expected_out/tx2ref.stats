@@ -1,0 +1,30 @@
+# gffcompare v0.12.6 | Command line was:
+#gffcompare.prev -r ../in/ref_cds.gtf --strict-match -e 0 -T --no-merge ../in/t_epoch.gtf -o tx2ref
+#
+
+#= Summary for dataset: ../in/t_epoch.gtf 
+#     Query mRNAs :   28814 in   28813 loci  (11231 multi-exon transcripts)
+#            (1 multi-transcript loci, ~1.0 transcripts per locus)
+# Reference mRNAs :   23802 in   23676 loci  (6182 multi-exon)
+# Super-loci w/ reference transcripts:    21546
+#-----------------| Sensitivity | Precision  |
+        Base level:    93.5     |    82.4    |
+        Exon level:    74.9     |    49.1    |
+      Intron level:    87.9     |    38.2    |
+Intron chain level:    80.3     |    44.2    |
+  Transcript level:    69.2     |    57.2    |
+       Locus level:    69.6     |    57.2    |
+
+     Matching intron chains:    4963
+       Matching transcripts:   16470
+              Matching loci:   16470
+
+          Missed exons:    2738/33436	(  8.2%)
+           Novel exons:   19002/50971	( 37.3%)
+        Missed introns:     838/9633	(  8.7%)
+         Novel introns:   13315/22157	( 60.1%)
+           Missed loci:    1961/23676	(  8.3%)
+            Novel loci:    6962/28813	( 24.2%)
+
+ Total union super-loci across all input datasets: 28508 
+28814 out of 28814 consensus transcripts written in tx2ref.annotated.gtf (0 discarded as redundant)
