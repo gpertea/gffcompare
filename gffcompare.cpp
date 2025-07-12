@@ -42,8 +42,8 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transcripts from the same sample if their boundaries are fully contained \n\
     within (or same with) matching transcripts\n\
     if --strict-match is also given, exact match of all exons is required\n\
- --no-exon-merge : disable close-exon merging (default: merge exons separated\n\
-   by \"introns\" shorter than 5 bases\n\
+ --no-exon-merge (--no-merge) : disable close-exon merging (default: merge exons\n\
+   separated by \"introns\" shorter than 5 bases\n\
 \n\
  -s path to genome sequences (optional); this can be either a multi-FASTA\n\
     file or a directory containing single-fasta files (one for each contig);\n\
@@ -261,7 +261,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   GArgs args(argc, argv,
-		  "version;help;debug;gids;cset;gidnames;gnames;no-exon-merge;strict-match;cds-match;"
+		  "version;help;debug;gids;cset;gidnames;gnames;no-exon-merge;no-merge;strict-match;cds-match;"
 		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
   int e;
   if ((e=args.isError())>0) {
@@ -289,7 +289,7 @@ int main(int argc, char* argv[]) {
   stricterMatching=(args.getOpt("strict-match")!=NULL);
   //if (stricterMatching) exonEndRange=0;
   cdsMatching = (args.getOpt("cds-match") != NULL);
-  noMergeCloseExons=(args.getOpt("no-exon-merge")!=NULL);
+  noMergeCloseExons=(args.getOpt("no-exon-merge")!=NULL || args.getOpt("no-merge")!=NULL);
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt("chr-stats")!=NULL);

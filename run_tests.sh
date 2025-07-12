@@ -24,6 +24,7 @@ cd tests/wrk
 
 ## test 1 : self-matching check
 echo "=== Running test #1"
+rm -f selfm.*
 ../../gffcompare -T ../in/ref_cds.gtf -r ../in/ref_cds.gtf -o selfm >& /dev/null
 fexp=../expected_out/selfm.stats
 fout=selfm.stats
@@ -34,6 +35,7 @@ else
 fi
 
 echo "=== Running test #2"
+rm -f tx2ref.*
 ../../gffcompare -r ../in/ref_cds.gtf --strict-match -e 0 -T --no-merge ../in/t_epoch.gtf -o tx2ref >& /dev/null
 fexp=../expected_out/tx2ref.stats
 fout=tx2ref.stats
