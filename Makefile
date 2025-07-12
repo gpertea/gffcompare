@@ -70,6 +70,9 @@ gffcompare: ${OBJS} ./gtf_tracking.o ./gffcompare.o
 trmap: ${OBJS} ./trmap.o
 	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
 
+test demo tests: gffcompare trmap
+	@./run_tests.sh
+
 .PHONY : clean
 clean:: 
 	@${RM} core core.* gffcompare gffcompare.exe trmap trmap.exe ${OBJS} *.o* 
