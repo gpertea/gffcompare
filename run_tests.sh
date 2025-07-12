@@ -23,9 +23,8 @@ mkdir -p tests/wrk
 cd tests/wrk
 
 ## test 1 : self-matching check
-
-../../gffcompare -T ../in/self-match.gtf -r ../in/self-match.gtf -o selfm
-
+echo "=== Running test #1"
+../../gffcompare -T ../in/self-match.gtf -r ../in/self-match.gtf -o selfm >& /dev/null
 fexp=../expected_out/selfm.stats
 fout=selfm.stats
 if diff -q -I '^#' $fout $fexp &>/dev/null; then
@@ -34,4 +33,14 @@ else
    err_exit "Error: test failed, output $fout different than expected ($fexp)!"
 fi
 
+echo "=== Running test #2"
+../../gffcompare -r ../in/ref_cds.gtf --strict-match -e 0 -T --no-merge ../in/t_epoch.gtf -o tx2ref >& /dev/null
+fexp=../expected_out/tx2ref.stats
+fout=tx2ref.stats
+if diff -q -I '^#' $fout $fexp &>/dev/null; then
+    echo "  OK."
+else
+   diff -I '^#' $fout $fexp
+   err_exit "Error: test failed, output $fout different than expected ($fexp)!"
+fi
 
