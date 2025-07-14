@@ -1,0 +1,30 @@
+# gffcompare v0.12.6 | Command line was:
+#gffcompare.prev -T ../in/self-match.gtf -r ../in/self-match.gtf -o selfm
+#
+
+#= Summary for dataset: ../in/self-match.gtf 
+#     Query mRNAs :   23802 in   23676 loci  (6182 multi-exon transcripts)
+#            (85 multi-transcript loci, ~1.0 transcripts per locus)
+# Reference mRNAs :   23802 in   23676 loci  (6182 multi-exon)
+# Super-loci w/ reference transcripts:    23676
+#-----------------| Sensitivity | Precision  |
+        Base level:   100.0     |   100.0    |
+        Exon level:   100.0     |   100.0    |
+      Intron level:   100.0     |   100.0    |
+Intron chain level:   100.0     |   100.0    |
+  Transcript level:   100.0     |   100.0    |
+       Locus level:   100.0     |   100.0    |
+
+     Matching intron chains:    6182
+       Matching transcripts:   23802
+              Matching loci:   23676
+
+          Missed exons:       0/33436	(  0.0%)
+           Novel exons:       0/33436	(  0.0%)
+        Missed introns:       0/9633	(  0.0%)
+         Novel introns:       0/9633	(  0.0%)
+           Missed loci:       0/23676	(  0.0%)
+            Novel loci:       0/23676	(  0.0%)
+
+ Total union super-loci across all input datasets: 23676 
+23802 out of 23802 consensus transcripts written in selfm.annotated.gtf (0 discarded as redundant)

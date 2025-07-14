@@ -85,7 +85,7 @@ GffObj* is_TDup(GffObj* m, GList<GffObj>& mrnas, int& dupidx, bool matchContain=
       //locus overlap here:
       //if (tMatch(*m, omrna, ovlen, !matchContain, matchContain)) {
       int ovlen=0;
-      char matchType=transcriptMatch(*m, omrna, ovlen);
+      char matchType=transcriptMatch(*m, omrna, ovlen, 0, cdsMatching);
       if (matchType>0) {
     	  if (matchType=='=' || !matchContain || omrna.contains(m) ) {
 				 dupidx=i;
@@ -457,60 +457,6 @@ int parse_mRNAs(GfList& mrnas,
 	return tredundant;
 }
 
-/*
-bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch, bool contain_only) {
-	//strict intron chain match, or single-exon match
-	int imax=a.exons.Count()-1;
-	int jmax=b.exons.Count()-1;
-	ovlen=0;
-	if (imax!=jmax) return false; //different number of exons, cannot match
-	if (imax==0) { //single-exon mRNAs
-		if (contain_only) { //require strict boundary containment (a in b or b in a)
-			//but also that at least 80% of the largest one be covered
-		   if (strictMatching)
-			   return (a.exons[0]->start==b.exons[0]->start &&
-			   						a.exons[0]->end==b.exons[0]->end);
-		   else
-			   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.8) ||
-		           (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.8));
-		}
-		if (relaxed_singleExonMatch) { //contain_only was already tested
-			return (singleExonTMatch(a,b,ovlen));
-		} else {
-			//same as contain_only, but stricter (at least 90% larger transcript coverage)
-			if (strictMatching)
-				return (a.exons[0]->start==b.exons[0]->start &&
-						a.exons[0]->end==b.exons[0]->end);
-			else
-			   return ((a.start>=b.start && a.end<=b.end && a.covlen>=b.covlen*0.9) ||
-			        (b.start>=a.start && b.end<=a.end && b.covlen>=a.covlen*0.9));
-		}
-	}
-	if ( a.exons[imax]->start<b.exons[0]->end ||
-		b.exons[jmax]->start<a.exons[0]->end )
-		return false; //intron chains do not overlap at all
-	//check intron overlaps
-	ovlen=a.exons[0]->end-(GMAX(a.start,b.start))+1;
-	ovlen+=(GMIN(a.end,b.end))-a.exons.Last()->start;
-	for (int i=1;i<=imax;i++) {
-		if (i<imax) ovlen+=a.exons[i]->len();
-		if ((a.exons[i-1]->end!=b.exons[i-1]->end) ||
-			(a.exons[i]->start!=b.exons[i]->start)) {
-			return false; //intron mismatch
-		}
-	}
-	//--- intron chain is matching ---
-	if (contain_only) {//requires actual coordinate containing
-		     if (strictMatching)
-		    	 return (a.exons[0]->start==b.exons[0]->start &&
-		    			 a.exons.Last()->end==b.exons.Last()->end);
-		     else return ((a.start>=b.start && a.end<=b.end) ||
-		           (b.start>=a.start && b.end<=a.end));
-	}
-	else return true;
-}
-*/
-
 void cluster_mRNAs(GList<GffObj> & mrnas, GList<GLocus> & loci, int qfidx) {
 	//mrnas sorted by start coordinate
 	//and so are the loci
@@ -751,21 +697,26 @@ void read_mRNAs(FILE* f, GList<GSeqData>& seqdata, GList<GSeqData>* ref_data,
       HeapProfilerDump("post_readAll");
 #endif
     //if (!isRefData && gtf_tracking_verbose)
-	if (isRefData)
+    if (gtf_tracking_verbose) {
+	if (isRefData) {
 		GMessage("  %d reference transcripts loaded.\n", gffr->gflst.Count());
+        }
 	else
 		if (!gtf_tracking_largeScale)
 			GMessage("  %d query transfrags loaded.\n", gffr->gflst.Count());
+    }
     int d=parse_mRNAs(gffr->gflst, seqdata, isRefData, discardDups, qfidx,
     		             only_multiexon);
 #ifdef HEAPROFILE
     if (IsHeapProfilerRunning())
       HeapProfilerDump("post_parse_mRNAs");
 #endif
-	if (d>0) { //(gtf_tracking_verbose && d>0)
-	  if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
-	            else GMessage("  %d duplicate query transfrags discarded.\n",d);
-	}
+    if (gtf_tracking_verbose) {
+      if (d>0) { //(gtf_tracking_verbose && d>0)
+        if (isRefData) GMessage("  %d duplicate reference transcripts discarded.\n",d);
+                  else GMessage("  %d duplicate query transfrags discarded.\n",d);
+      }
+    }
 	//imrna_counter=gffr->mrnas.Count();
 	delete gffr; //free the extra memory and unused GffObjs
 #ifdef HEAPROFILE
