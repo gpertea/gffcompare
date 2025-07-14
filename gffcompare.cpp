@@ -42,6 +42,10 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
     transcripts from the same sample if their boundaries are fully contained \n\
     within (or same with) matching transcripts\n\
     if --strict-match is also given, exact match of all exons is required\n\
+ --merge : merge highly similar transcripts based on reciprocal overlap\n\
+    the amount of overlap can be controlled using the theshold-overlap parameter -t;\n\
+    transcripts are merged using a keep-longer-fragment strategy\n\
+ -t threshold for relative overlap between two transcripts to be merged (default: >95%)\n\
  --no-exon-merge (--no-merge) : disable close-exon merging (default: merge exons\n\
    separated by \"introns\" shorter than 5 bases\n\
 \n\
@@ -99,6 +103,7 @@ bool perContigStats=false; // -S to enable separate stats for every contig/chrom
 bool discardContained=false; //activated by -C, -A or -X
 //bool showContained=true; // opposite of -C, default is to show them in combined.gtf
 //-- moved to gtf_tracking
+bool mergeSimilar = false; // global flag for --merge
 bool keepAltTSS=false; //-A option
 bool keepRefMatching=false; //-K with -C/-A/-X
 bool allowIntronSticking=false; //-X option
@@ -127,6 +132,7 @@ GStr consGTF;
 int outConsCount=0;
 int polyrun_range=2000; //polymerase run range 2KB
 double scoreThreshold=0;
+double threshold_overlap;
 char* cprefix=NULL;
 bool tprefix_req=false;
 FILE* ffasta=NULL; //genomic seq file
@@ -262,7 +268,7 @@ int main(int argc, char* argv[]) {
 
   GArgs args(argc, argv,
 		  "version;help;debug;gids;cset;gidnames;gnames;no-exon-merge;no-merge;strict-match;cds-match;"
-		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
+		  "chr-stats;merge;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:t:");
   int e;
   if ((e=args.isError())>0) {
     show_usage();
@@ -290,6 +296,12 @@ int main(int argc, char* argv[]) {
   //if (stricterMatching) exonEndRange=0;
   cdsMatching = (args.getOpt("cds-match") != NULL);
   noMergeCloseExons=(args.getOpt("no-exon-merge")!=NULL || args.getOpt("no-merge")!=NULL);
+  mergeSimilar = (args.getOpt("merge") != NULL);
+  GStr t_overlap = args.getOpt("t");
+  if (!t_overlap.is_empty())
+      threshold_overlap = t_overlap.asReal();
+  else
+      threshold_overlap = 0.95;
   if (gid_add_ref_gids && gid_add_ref_gnames)
 	GError("Error: options --gids and --gidnames are mutually exclusive!\n");
   perContigStats=(args.getOpt("chr-stats")!=NULL);
@@ -1237,10 +1249,53 @@ void tssCluster(GXLocus& xloc)
     }
 }
 
+// Helper: compute reciprocal overlap between two transcripts
+double reciprocal_overlap(GffObj* a, GffObj* b) {
+    int ovl_start = std::max(a->start, b->start);
+    int ovl_end = std::min(a->end, b->end);
+    if (ovl_end < ovl_start) return 0.0;
+    int ovl_len = ovl_end - ovl_start + 1;
+    double frac_a = (double)ovl_len / (a->end - a->start + 1);
+    double frac_b = (double)ovl_len / (b->end - b->start + 1);
+    return std::min(frac_a, frac_b);
+}
+
+// Merge highly similar transcripts in a locus (default: 95% reciprocal overlap)
+void mergeSimilarTranscripts(GXLocus& xloc, double threshold = 0.95) {
+    GVec<bool> merged(xloc.tcons.Count(), false);
+    for (int i = 0; i < xloc.tcons.Count(); ++i) {
+        if (merged[i]) continue;
+        GXConsensus* ci = xloc.tcons[i];
+        for (int j = i + 1; j < xloc.tcons.Count(); ++j) {
+            if (merged[j]) continue;
+            GXConsensus* cj = xloc.tcons[j];
+            double rovl = reciprocal_overlap(ci->tcons, cj->tcons);
+            if (rovl >= threshold) {
+                // by defaullt, we keep the longer transcript
+                int len_i = ci->tcons->end - ci->tcons->start + 1;
+                int len_j = cj->tcons->end - cj->tcons->start + 1;
+                if (len_i >= len_j) {
+                    merged[j] = true; // keep ci
+                } else {
+                    merged[i] = true; // keep cj
+                    break; // ci is merged, stop comparing it to others
+                }
+            }
+        }
+    }
+    // Remove merged transcripts
+    for (int i = xloc.tcons.Count() - 1; i >= 0; --i) {
+        if (merged[i]) {
+            xloc.tcons.Delete(i);
+        }
+    }
+}
+
 void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, /* GFaSeqGet *faseq, */ FILE* fr=NULL) {
 	for (int l=0;l<xloci.Count();l++) {
 		if (xloci[l]->qloci.Count()==0) continue;
 		GXLocus& xloc=*(xloci[l]);
+    if (mergeSimilar) mergeSimilarTranscripts(xloc, threshold_overlap); // Only if --merge
 		xloc.checkContainment(keepAltTSS, allowIntronSticking);
 		tssCluster(xloc);//cluster and assign tss_id and cds_id to each xconsensus in xloc
 		//protCluster(xloc,faseq);
