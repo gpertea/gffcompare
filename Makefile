@@ -77,11 +77,11 @@ ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
 ./gffcompare.o : ./gtf_tracking.h
 
-gffcompare: ${OBJS} ./gtf_tracking.o ./gffcompare.o
-	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
+gffcompare: gclib-init ${OBJS} ./gtf_tracking.o ./gffcompare.o
+	${LINKER} ${LDFLAGS} -o $@ ${OBJS} ./gtf_tracking.o ./gffcompare.o ${LIBS}
 
-trmap: ${OBJS} ./trmap.o
-	${LINKER} ${LDFLAGS} -o $@ ${filter-out %.a %.so, $^} ${LIBS}
+trmap: gclib-init ${OBJS} ./trmap.o
+	${LINKER} ${LDFLAGS} -o $@ ${OBJS} ./trmap.o ${LIBS}
 
 test demo tests: gffcompare trmap
 	@./run_tests.sh
