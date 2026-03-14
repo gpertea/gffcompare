@@ -60,9 +60,15 @@ all debug release static memcheck memdebug : gclib-init gffcompare trmap
 gclib-init:
 	@if [ ! -f "${GCLIB}/GBase.h" ]; then \
 	  if [ "${GCLIB}" = "./gclib" ] && [ -d .git ]; then \
-	    git submodule update --init gclib; \
+	    git submodule sync -- gclib; \
+	    git submodule update --init --checkout gclib; \
+	    test -f "${GCLIB}/GBase.h" || { \
+	      echo "Error: gclib submodule init failed"; \
+	      exit 1; \
+	    }; \
 	  else \
 	    echo "Error: ${GCLIB}/GBase.h not found"; \
+	    echo "Hint: clone with --recurse-submodules or run: git submodule update --init gclib"; \
 	    exit 1; \
 	  fi; \
 	fi
