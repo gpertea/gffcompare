@@ -16,9 +16,11 @@ LDFLAGS := $(if $(LDFLAGS),$(LDFLAGS),-g)
 
 CXXFLAGS := $(if $(CXXFLAGS),$(BASEFLAGS) $(CXXFLAGS),$(BASEFLAGS))
 
+LIBS := -lz
+
+
 ifneq (,$(filter %release %static, $(MAKECMDGOALS)))
   # -- release build
-  LIBS := 
   ifneq (,$(findstring static,$(MAKECMDGOALS)))
     LDFLAGS += -static-libstdc++ -static-libgcc
   endif
@@ -41,7 +43,7 @@ else # debug build
      #CFLAGS += $(BASEFLAGS)
      CXXFLAGS += -fno-common -fstack-protector
      #LIBS := -Wl,-Bstatic -lasan -lubsan -Wl,-Bdynamic -ldl $(LIBS)
-     LIBS := -lasan -lubsan -ldl $(LIBS)
+     LIBS := -lz -lasan -lubsan -ldl $(LIBS)
   endif
 endif
 
