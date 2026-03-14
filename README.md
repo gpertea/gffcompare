@@ -46,13 +46,16 @@ The streaming input GFF query input file to be streamed must be _well-formed_ --
 Steps for building this package from github:
 ```
   cd /some/build/dir
-  git clone https://github.com/gpertea/gffcompare
+  git clone --recurse-submodules https://github.com/gpertea/gffcompare
   cd gffcompare
   make release
 ```
+If you already cloned without `--recurse-submodules`, run
+`git submodule update --init gclib` before building, or just run `make`
+and it will initialize the `gclib` core submodule automatically.
+
 If you downloaded the standalone source package `gffread-*.tar.gz` then just unpack that, change to the unpacked directory and run `make release` there.
 
 
 This should build the **gffcompare** and **trmap** binary executables in the 
 current directory.
-

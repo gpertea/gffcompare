@@ -9,6 +9,14 @@ echo "------------------------------------"
 mkdir -p $pack/gclib
 cp Makefile LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} trmap.cpp $pack/
 GCL=./gclib
+if [ ! -f $GCL/GBase.h ]; then
+  if [ -d .git ]; then
+    git submodule update --init $GCL
+  else
+    echo "Error: $GCL/GBase.h not found"
+    exit 1
+  fi
+fi
 cp -p $GCL/{GVec,GList,GIntervalTree,GHashMap,khashl}.hh $GCL/{xxhash,wyhash,GBitVec}.h $pack/gclib/
 cp -p $GCL/{GArgs,GBase,gdna,GStr,gff,codons,GFaSeqGet,GFastaIndex}.{h,cpp} $pack/gclib/
 tar cvfz $pack.tar.gz $pack

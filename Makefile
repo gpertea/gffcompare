@@ -54,11 +54,18 @@ OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
  ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
  ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
-.PHONY : all
-all debug release static memcheck memdebug : ./gclib gffcompare trmap
+.PHONY : all gclib-init
+all debug release static memcheck memdebug : gclib-init gffcompare trmap
 
-./gclib:
-	git clone https://github.com/gpertea/gclib.git ./gclib
+gclib-init:
+	@if [ ! -f "${GCLIB}/GBase.h" ]; then \
+	  if [ "${GCLIB}" = "./gclib" ] && [ -d .git ]; then \
+	    git submodule update --init gclib; \
+	  else \
+	    echo "Error: ${GCLIB}/GBase.h not found"; \
+	    exit 1; \
+	  fi; \
+	fi
 
 ${GCLIB}/gff.o  : ${GCLIB}/gff.h
 ./gtf_tracking.o : ./gtf_tracking.h
