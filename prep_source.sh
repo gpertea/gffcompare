@@ -11,7 +11,8 @@ cp Makefile LICENSE README.md gffcompare.cpp gtf_tracking.{h,cpp} trmap.cpp $pac
 GCL=./gclib
 if [ ! -f $GCL/GBase.h ]; then
   if [ -d .git ]; then
-    git submodule update --init $GCL
+    git submodule sync -- gclib
+    git submodule update --init --checkout $GCL
   else
     echo "Error: $GCL/GBase.h not found"
     exit 1

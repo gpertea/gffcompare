@@ -50,9 +50,10 @@ Steps for building this package from github:
   cd gffcompare
   make release
 ```
-If you already cloned without `--recurse-submodules`, run
-`git submodule update --init gclib` before building, or just run `make`
-and it will initialize the `gclib` core submodule automatically.
+This branch is tied to the bundled `./gclib` submodule (gclib-core) and does
+not support alternate external gclib paths for building.
+If you already cloned without `--recurse-submodules`, run:
+`git submodule update --init --checkout gclib`
 
 If you downloaded the standalone source package `gffread-*.tar.gz` then just unpack that, change to the unpacked directory and run `make release` there.
 

@@ -1,6 +1,8 @@
 #include "GArgs.h"
 #include <ctype.h>
 #include <errno.h>
+#include <inttypes.h>
+#include <limits.h>
 #include "gtf_tracking.h"
 
 #define VERSION "0.12.10"
@@ -137,7 +139,7 @@ GFastaHandler gfasta;
 int xlocnum=0;
 int tsscl_num=0; //for tss cluster IDs
 int protcl_num=0; //for "unique" protein IDs within TSS clusters
-uint exonEndRange=100; // -e value, only used for exon level Sn/Sp
+int64_t exonEndRange=100; // -e value, only used for exon level Sn/Sp
 //int total_tcons=0;
 int total_xloci_alt=0;
 
@@ -333,7 +335,11 @@ int main(int argc, char* argv[]) {
 		  } //for each argument
 	  }
   }
-  numQryFiles=qryfiles.Count();
+  int64_t qfile_count=qryfiles.Count();
+  if (qfile_count>INT_MAX) {
+    GError("Error: too many query files (%" PRId64 "), max supported is %d\n", qfile_count, INT_MAX);
+  }
+  numQryFiles=(int)qfile_count;
   if (numQryFiles==0) {
 	  show_usage();
 	  exit(1);
@@ -407,8 +413,8 @@ int main(int argc, char* argv[]) {
     if (haveRefs && !gtf_tracking_largeScale) {
     	//prepare qlocovls for each ref locus
     	for (int i=0;i<ref_data.Count();i++) {
-    		prepRefLoci(ref_data[i]->loci_f, qryfiles.Count());
-    		prepRefLoci(ref_data[i]->loci_r, qryfiles.Count());
+    		prepRefLoci(ref_data[i]->loci_f, numQryFiles);
+    		prepRefLoci(ref_data[i]->loci_r, numQryFiles);
     	}
     }
 
@@ -471,11 +477,11 @@ int main(int argc, char* argv[]) {
   GList<GSeqData>** qrysdata=NULL;
   FILE** tfiles=NULL;
   FILE** rtfiles=NULL;
-  GMALLOC(qrysdata, numQryFiles*sizeof(GList<GSeqData>*));
+  GMALLOC(qrysdata, (size_t)numQryFiles*sizeof(GList<GSeqData>*));
   if (tmapFiles) {
-	  GMALLOC(tfiles, numQryFiles*sizeof(FILE*));
+	  GMALLOC(tfiles, (size_t)numQryFiles*sizeof(FILE*));
 	  if (haveRefs) {
-		  GMALLOC(rtfiles, numQryFiles*sizeof(FILE*));
+		  GMALLOC(rtfiles, (size_t)numQryFiles*sizeof(FILE*));
 	  }
   }
   gffAnnotate=(numQryFiles==1 && !discardContained && haveRefs && !qDupDiscard 
@@ -597,17 +603,17 @@ int main(int argc, char* argv[]) {
 
 void show_exons(FILE* f, GffObj& m) {
   fprintf(f,"(");
-  int imax=m.exons.Count()-1;
-  for (int i=0;i<=imax;i++) {
-    if (i==imax) fprintf(f,"%d-%d)",m.exons[i]->start, m.exons[i]->end);
-            else fprintf(f,"%d-%d,",m.exons[i]->start, m.exons[i]->end);
+  int64_t imax=m.exons.Count()-1;
+  for (int64_t i=0;i<=imax;i++) {
+    if (i==imax) fprintf(f,"%" PRId64 "-%" PRId64 ")",m.exons[i]->start, m.exons[i]->end);
+            else fprintf(f,"%" PRId64 "-%" PRId64 ",",m.exons[i]->start, m.exons[i]->end);
     }
 }
 
-bool exon_match(GXSeg& r, GXSeg& q, uint fuzz=0) {
- uint sd = (r.start>q.start) ? r.start-q.start : q.start-r.start;
- uint ed = (r.end>q.end) ? r.end-q.end : q.end-r.end;
- uint ex_range=exonEndRange;
+bool exon_match(GXSeg& r, GXSeg& q, int64_t fuzz=0) {
+ int64_t sd = (r.start>q.start) ? r.start-q.start : q.start-r.start;
+ int64_t ed = (r.end>q.end) ? r.end-q.end : q.end-r.end;
+ int64_t ex_range=exonEndRange;
  if (ex_range<=fuzz) ex_range=fuzz;
  if ((r.flags&1) && (q.flags&1)) { // first exon ?
 	if (sd>ex_range) return false;
@@ -703,16 +709,16 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   int i=0; //locus mexons
   int j=0; //refmexons
   while (i<super->qmexons.Count() && j<super->rmexons.Count()) {
-     uint istart=super->qmexons[i].start;
-     uint iend=super->qmexons[i].end;
-     uint jstart=super->rmexons[j].start;
-     uint jend=super->rmexons[j].end;
+     int64_t istart=super->qmexons[i].start;
+     int64_t iend=super->qmexons[i].end;
+     int64_t jstart=super->rmexons[j].start;
+     int64_t jend=super->rmexons[j].end;
      if (iend<jstart) { i++; continue; }
      if (jend<istart) { j++; continue; }
      //v--overlap here:
-     uint ovlstart = jstart>istart? jstart : istart;
-     uint ovlend = iend<jend ? iend : jend;
-     uint ovlen=ovlend-ovlstart+1;
+     int64_t ovlstart = jstart>istart? jstart : istart;
+     int64_t ovlend = iend<jend ? iend : jend;
+     int64_t ovlen=ovlend-ovlstart+1;
      super->baseTP+=ovlen; //qbases_cov
      if (iend<jend) i++;
                else j++;
@@ -724,15 +730,15 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   */
   // -- exon level comparison:
   int* qexovl; //flags for qry exons with ref overlap
-  GCALLOC(qexovl,super->quexons.Count()*sizeof(int));
+  GCALLOC(qexovl,(size_t)super->quexons.Count()*sizeof(int));
   int* rexovl; //flags for ref exons with qry overlap
-  GCALLOC(rexovl,super->ruexons.Count()*sizeof(int));
+  GCALLOC(rexovl,(size_t)super->ruexons.Count()*sizeof(int));
   for (int i=0;i<super->quexons.Count();i++) {
-	  uint istart=super->quexons[i].start;
-	  uint iend=super->quexons[i].end;
+	  int64_t istart=super->quexons[i].start;
+	  int64_t iend=super->quexons[i].end;
 	  for (int j=0;j<super->ruexons.Count();j++) {
-		  uint jstart=super->ruexons[j].start;
-		  uint jend=super->ruexons[j].end;
+		  int64_t jstart=super->ruexons[j].start;
+		  int64_t jend=super->ruexons[j].end;
 		  if (iend<jstart) break;
 		  if (jend<istart) continue;
 		  //--- overlap here between quexons[i] and ruexons[j]
@@ -774,22 +780,22 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
   int* qinovl=NULL; //flags for qry introns with at some ref intron overlap
   int* qtpinovl=NULL; //flags for qry introns with ref intron match
   if (super->qintrons.Count()>0) {
-    GCALLOC(qinovl,super->qintrons.Count()*sizeof(int));
-    GCALLOC(qtpinovl,super->qintrons.Count()*sizeof(int));
+    GCALLOC(qinovl,(size_t)super->qintrons.Count()*sizeof(int));
+    GCALLOC(qtpinovl,(size_t)super->qintrons.Count()*sizeof(int));
   }
   //-- reference:
   int* rinovl=NULL; //flags for ref introns with qry overlap
   int* rtpinovl=NULL; //ref introns with qry intron match
   if (super->rintrons.Count()>0) {
-    GCALLOC(rinovl,super->rintrons.Count()*sizeof(int));
-    GCALLOC(rtpinovl,super->rintrons.Count()*sizeof(int));
+    GCALLOC(rinovl,(size_t)super->rintrons.Count()*sizeof(int));
+    GCALLOC(rtpinovl,(size_t)super->rintrons.Count()*sizeof(int));
   }
   for (int i=0;i<super->qintrons.Count();i++) {
-    uint istart=super->qintrons[i].start;
-    uint iend=super->qintrons[i].end;
+    int64_t istart=super->qintrons[i].start;
+    int64_t iend=super->qintrons[i].end;
     for (int j=0;j<super->rintrons.Count();j++) {
-      uint jstart=super->rintrons[j].start;
-      uint jend=super->rintrons[j].end;
+      int64_t jstart=super->rintrons[j].start;
+      int64_t jend=super->rintrons[j].end;
       if (iend<jstart) break;
       if (jend<istart) continue;
       //--- overlap here between qintrons[i] and rintrons[j]
@@ -833,19 +839,19 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
                               //'~' when stricter transcript matching is activated and only the intron chain was matched
   //GVec<int> amatched_refs(super->rmrnas.Count(), 0); //keep track of fuzzy-matched refs
   for (int i=0;i<super->qmrnas.Count();i++) {
-	  uint istart=super->qmrnas[i]->exons.First()->start;
-	  uint iend=super->qmrnas[i]->exons.Last()->end;
+	  int64_t istart=super->qmrnas[i]->exons.First()->start;
+	  int64_t iend=super->qmrnas[i]->exons.Last()->end;
 	  for (int j=0;j<super->rmrnas.Count();j++) {
 		  if (matched_refs[j]=='=') continue; //already counted as ichainTP and mrnaTP
-		  uint jstart=super->rmrnas[j]->exons.First()->start;
-		  uint jend=super->rmrnas[j]->exons.Last()->end;
+		  int64_t jstart=super->rmrnas[j]->exons.First()->start;
+		  int64_t jend=super->rmrnas[j]->exons.Last()->end;
 		  if (iend<jstart) break;
 		  if (jend<istart) continue;
 		  //--- overlapping  transcripts ---
 		  if (super->qmrnas[i]->udata & 2) continue; //already found a matching ref for this
 		  GLocus* qlocus=((CTData*)super->qmrnas[i]->uptr)->locus;
 		  GLocus* rlocus=((CTData*)super->rmrnas[j]->uptr)->locus;
-		  int ovlen=0;
+		  int64_t ovlen=0;
 		  //look for a transcript match ('=' code for full exact exons match, '~' )
 		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, terminalMatchRange, cdsMatching);
 		  //bool isTMatch=(tmatch>0);
@@ -895,7 +901,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
 
 //look for qry data for a specific genomic sequence
 GSeqData* getQryData(int gid, GList<GSeqData>& qdata) {
-  int qi=-1;
+  int64_t qi=-1;
   GSeqData f(gid);
   GSeqData* q=NULL;
   if (qdata.Found(&f,qi))
@@ -942,7 +948,7 @@ const char* getGeneID(GffObj& gfobj) {
 void writeLoci(FILE* f, GList<GLocus> & loci) {
  for (int l=0;l<loci.Count();l++) {
    GLocus& loc=*(loci[l]);
-   fprintf(f,"%s\t%s[%c]%d-%d\t", loc.mrna_maxcov->getID(),
+   fprintf(f,"%s\t%s[%c]%" PRId64 "-%" PRId64 "\t", loc.mrna_maxcov->getID(),
        loc.mrna_maxcov->getGSeqName(),
            loc.mrna_maxcov->strand, loc.start,loc.end);
    //now print all transcripts in this locus, comma delimited
@@ -1023,8 +1029,8 @@ class GProtCl {
 
 class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
  public:
-   uint fstart; //lowest coordinate of the first exon
-   uint fend; //highest coordinate of the first exon
+   int64_t fstart; //lowest coordinate of the first exon
+   int64_t fend; //highest coordinate of the first exon
    GList<GXConsensus> tsscl;
    GTssCl(GXConsensus* c=NULL):tsscl(true,false,false) {
      start=0;
@@ -1049,8 +1055,8 @@ class GTssCl:public GSeg { //experiment cluster of ref loci (isoforms)
             return true;
             }
      //check if it can be added to existing xconsensi
-     uint nfend=0;
-     uint nfstart=0;
+     int64_t nfend=0;
+     int64_t nfstart=0;
      if (c->tcons->strand=='-') {
         //no, the first exons don't have to overlap
         //if (!c->tcons->exons.Last()->overlap(fstart,fend)) return false;
@@ -1104,7 +1110,7 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
 	 g_id.appendfmt("XLOC_%06d",xlocnum);
  }
  fprintf(fc,
-   "%s\t%s\ttranscript\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\";"  ,
+   "%s\t%s\ttranscript\t%" PRId64 "\t%" PRId64 "\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\";"  ,
    xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->start, xc->tcons->end, xc->tcons->strand,
      t_id.chars(), g_id.chars());
  GStr ref_gene_name;
@@ -1180,11 +1186,11 @@ void printConsGTF(FILE* fc, GXConsensus* xc, int xlocnum) {
  }
  fprintf(fc,"\n");
  //now print exons
- for (int i=0;i<xc->tcons->exons.Count();i++) {
+ for (int64_t i=0;i<xc->tcons->exons.Count();i++) {
    fprintf(fc,
-     "%s\t%s\texon\t%d\t%d\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\"; exon_number \"%d\";\n",
+     "%s\t%s\texon\t%" PRId64 "\t%" PRId64 "\t.\t%c\t.\ttranscript_id \"%s\"; gene_id \"%s\"; exon_number \"%" PRId64 "\";\n",
      xc->tcons->getGSeqName(),xc->tcons->getTrackName(),xc->tcons->exons[i]->start, xc->tcons->exons[i]->end, xc->tcons->strand,
-	 t_id.chars(), g_id.chars(), i+1);
+		 t_id.chars(), g_id.chars(), i+1);
        //xlocnum, cprefix, xc->id, i+1);
    }
 }
@@ -1255,7 +1261,7 @@ void printXLoci(FILE* f, FILE* fc, int qcount, GList<GXLocus>& xloci, /* GFaSeqG
 			printConsGTF(fc,xloc.tcons[c],xloc.id);
 			++outConsCount;
 		}
-		fprintf(f,"XLOC_%06d\t%s[%c]%d-%d\t", xloc.id,
+		fprintf(f,"XLOC_%06d\t%s[%c]%" PRId64 "-%" PRId64 "\t", xloc.id,
 				xloc.qloci[0]->mrna_maxcov->getGSeqName(),
 				xloc.strand, xloc.start,xloc.end);
 		//now print all transcripts in this locus, comma delimited
@@ -1299,10 +1305,10 @@ void writeIntron(FILE* f, char strand, GFaSeqGet* faseq, GSeg& iseg,
       }//for each intron
    if (rm!=NULL) break;
    } //for each ref mrna in this locus
- if (rm==NULL) GError("Error: couldn't find ref mrna for intron %d-%d! (BUG)\n",
+ if (rm==NULL) GError("Error: couldn't find ref mrna for intron %" PRId64 "-%" PRId64 "! (BUG)\n",
                          iseg.start,iseg.end);
- int ilen=iseg.end-iseg.start+1;
- fprintf(f,"%s\t%s\tintron\t%d\t%d\t.\t%c\t.\t",
+ int64_t ilen=iseg.end-iseg.start+1;
+ fprintf(f,"%s\t%s\tintron\t%" PRId64 "\t%" PRId64 "\t.\t%c\t.\t",
             rm->getGSeqName(),rm->getTrackName(),iseg.start,iseg.end,strand);
  if (faseq!=NULL) {
    const char* gseq=faseq->subseq(iseg.start, ilen);
@@ -1358,10 +1364,10 @@ void writeNIntron(FILE* f, char strand, GFaSeqGet* faseq, GSeg& iseg,
             } //match found
       }//for each intron
    } //for each ref mrna in this locus
- if (rms.Count()==0) GError("Error: couldn't find transcripts for intron %d-%d! (BUG)\n",
+ if (rms.Count()==0) GError("Error: couldn't find transcripts for intron %" PRId64 "-%" PRId64 "! (BUG)\n",
                          iseg.start,iseg.end);
- int ilen=iseg.end-iseg.start+1;
- fprintf(f,"%s\t%d\t%d\t%c\t",
+ int64_t ilen=iseg.end-iseg.start+1;
+ fprintf(f,"%s\t%" PRId64 "\t%" PRId64 "\t%c\t",
             rms[0]->getGSeqName(),iseg.start,iseg.end,strand);
 
  if (faseq!=NULL) { //print splice sites!
@@ -1483,7 +1489,7 @@ void collectQU(GSuperLocus& stats, GList<GLocus>& nloci) {
 }
 
 void printLocus(FILE* f, GLocus& loc, const char* gseqname) {
-  fprintf(f, "## Locus %s:%d-%d\n",gseqname, loc.start, loc.end);
+  fprintf(f, "## Locus %s:%" PRId64 "-%" PRId64 "\n",gseqname, loc.start, loc.end);
   for (int m=0;m<loc.mrnas.Count();m++) {
     loc.mrnas[m]->printGtf(f);
     }
@@ -1579,71 +1585,71 @@ void reportStats(FILE* fout, const char* setname, GSuperLocus& stotal,
   if (seqdata!=NULL) fprintf(fout, "#> Genomic sequence: %s \n", setname);
                 else fprintf(fout, "\n#= Summary for dataset: %s \n", setname);
 
-  fprintf(fout,   "#     Query mRNAs : %7d in %7d loci  (%d multi-exon transcripts)\n",
+  fprintf(fout,   "#     Query mRNAs : %7" PRId64 " in %7" PRId64 " loci  (%" PRId64 " multi-exon transcripts)\n",
           ps->total_qmrnas, ps->total_qloci, ps->total_qichains);
-  fprintf(fout, "#            (%d multi-transcript loci, ~%.1f transcripts per locus)\n",
-          ps->total_qloci_alt, ((double)ps->total_qmrnas/ps->total_qloci));
+  fprintf(fout, "#            (%" PRId64 " multi-transcript loci, ~%.1f transcripts per locus)\n",
+          ps->total_qloci_alt, ((double)ps->total_qmrnas/(double)ps->total_qloci));
 
   if (haveRefs) {
-    fprintf(fout, "# Reference mRNAs : %7d in %7d loci  (%d multi-exon)\n",
+    fprintf(fout, "# Reference mRNAs : %7" PRId64 " in %7" PRId64 " loci  (%" PRId64 " multi-exon)\n",
             ps->total_rmrnas, ps->total_rloci, ps->total_richains);
     if (ps->baseTP+ps->baseFP==0 || ps->baseTP+ps->baseFN==0) return;
-    fprintf(fout, "# Super-loci w/ reference transcripts:  %7d\n",ps->total_superloci);
+    fprintf(fout, "# Super-loci w/ reference transcripts:  %7" PRId64 "\n",ps->total_superloci);
 
     /*if (seqdata!=NULL) {
       fprintf(fout, "          ( %d/%d on forward/reverse strand)\n",
              seqdata->gstats_f.Count(),seqdata->gstats_r.Count());
        }*/
     fprintf(fout, "#-----------------| Sensitivity | Precision  |\n");
-    double sp=(100.0*(double)ps->baseTP)/(ps->baseTP+ps->baseFP);
-    double sn=(100.0*(double)ps->baseTP)/(ps->baseTP+ps->baseFN);
+    double sp=(100.0*(double)ps->baseTP)/(double)(ps->baseTP+ps->baseFP);
+    double sn=(100.0*(double)ps->baseTP)/(double)(ps->baseTP+ps->baseFN);
     fprintf(fout, "        Base level:   %5.1f     |   %5.1f    |\n",sn, sp);
-    sp=(100.0*(double)ps->exonQTP)/ps->total_qexons;
-    sn=(100.0*(double)ps->exonTP)/ps->total_rexons;
+    sp=(100.0*(double)ps->exonQTP)/(double)ps->total_qexons;
+    sn=(100.0*(double)ps->exonTP)/(double)ps->total_rexons;
     //DEBUG only:
     //fprintf(fout, "======> Exon stats: %d total_qexons, %d total_rexons, %d exonTP, %d exonFP, %d exonFN\n",
     //   ps->total_rexons, ps->total_qexons, ps->exonTP, ps->exonFP, ps->exonFN);
     fprintf(fout, "        Exon level:   %5.1f     |   %5.1f    |\n",sn, sp);
     if (ps->total_rintrons>0) {
       //intron level
-      sp=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFP);
-      sn=(100.0*(double)ps->intronTP)/(ps->intronTP+ps->intronFN);
+      sp=(100.0*(double)ps->intronTP)/(double)(ps->intronTP+ps->intronFP);
+      sn=(100.0*(double)ps->intronTP)/(double)(ps->intronTP+ps->intronFN);
       fprintf(fout, "      Intron level:   %5.1f     |   %5.1f    |\n",sn, sp);
       //intron chains:
-      sp=(100.0*(double)ps->ichainTP)/ps->total_qichains;
-      sn=(100.0*(double)ps->ichainTP)/ps->total_richains;
+      sp=(100.0*(double)ps->ichainTP)/(double)ps->total_qichains;
+      sn=(100.0*(double)ps->ichainTP)/(double)ps->total_richains;
       fprintf(fout, "Intron chain level:   %5.1f     |   %5.1f    |\n",sn, sp);
     }
-    sp=(100.0*(double)ps->mrnaTP)/ps->total_qmrnas;
-    sn=(100.0*(double)ps->mrnaTP)/ps->total_rmrnas;
+    sp=(100.0*(double)ps->mrnaTP)/(double)ps->total_qmrnas;
+    sn=(100.0*(double)ps->mrnaTP)/(double)ps->total_rmrnas;
     fprintf(fout, "  Transcript level:   %5.1f     |   %5.1f    |\n",sn, sp);
-    sp=(100.0*(double)ps->locusQTP)/ps->total_qloci;
-    sn=(100.0*(double)ps->locusTP)/ps->total_rloci;  //(ps->locusTP+ps->locusFN);
+    sp=(100.0*(double)ps->locusQTP)/(double)ps->total_qloci;
+    sn=(100.0*(double)ps->locusTP)/(double)ps->total_rloci;  //(ps->locusTP+ps->locusFN);
     fprintf(fout, "       Locus level:   %5.1f     |   %5.1f    |\n",sn, sp);
     //fprintf(fout, "                   (locus TP=%d, total ref loci=%d)\n",ps->locusTP, ps->total_rloci);
-    fprintf(fout,"\n     Matching intron chains: %7d\n",ps->ichainTP);
-    fprintf(fout,  "       Matching transcripts: %7d\n",ps->mrnaTP);
-    fprintf(fout,  "              Matching loci: %7d\n",ps->locusTP);
+    fprintf(fout,"\n     Matching intron chains: %7" PRId64 "\n",ps->ichainTP);
+    fprintf(fout,  "       Matching transcripts: %7" PRId64 "\n",ps->mrnaTP);
+    fprintf(fout,  "              Matching loci: %7" PRId64 "\n",ps->locusTP);
     fprintf(fout, "\n");
-    sn=(100.0*(double)ps->m_exons)/(ps->total_rexons);
-    fprintf(fout, "          Missed exons: %7d/%d\t(%5.1f%%)\n",ps->m_exons, ps->total_rexons, sn);
-    sn=(100.0*(double)ps->w_exons)/(ps->total_qexons);
-    fprintf(fout, "           Novel exons: %7d/%d\t(%5.1f%%)\n",ps->w_exons, ps->total_qexons,sn);
+    sn=(100.0*(double)ps->m_exons)/(double)(ps->total_rexons);
+    fprintf(fout, "          Missed exons: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->m_exons, ps->total_rexons, sn);
+    sn=(100.0*(double)ps->w_exons)/(double)(ps->total_qexons);
+    fprintf(fout, "           Novel exons: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->w_exons, ps->total_qexons,sn);
     if (ps->total_rintrons>0) {
-    sn=(100.0*(double)ps->m_introns)/(ps->total_rintrons);
-    fprintf(fout, "        Missed introns: %7d/%d\t(%5.1f%%)\n",ps->m_introns, ps->total_rintrons, sn);
+    sn=(100.0*(double)ps->m_introns)/(double)(ps->total_rintrons);
+    fprintf(fout, "        Missed introns: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->m_introns, ps->total_rintrons, sn);
     }
     if (ps->total_qintrons>0) {
-    sn=(100.0*(double)ps->w_introns)/(ps->total_qintrons);
-    fprintf(fout, "         Novel introns: %7d/%d\t(%5.1f%%)\n",ps->w_introns, ps->total_qintrons,sn);
+    sn=(100.0*(double)ps->w_introns)/(double)(ps->total_qintrons);
+    fprintf(fout, "         Novel introns: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->w_introns, ps->total_qintrons,sn);
     }
     if (ps->total_rloci>0) {
-    sn=(100.0*(double)ps->m_loci)/(ps->total_rloci);
-    fprintf(fout, "           Missed loci: %7d/%d\t(%5.1f%%)\n",ps->m_loci, ps->total_rloci, sn);
+    sn=(100.0*(double)ps->m_loci)/(double)(ps->total_rloci);
+    fprintf(fout, "           Missed loci: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->m_loci, ps->total_rloci, sn);
     }
     if (ps->total_qloci>0) {
-    sn=(100.0*(double)ps->w_loci)/(ps->total_qloci);
-    fprintf(fout, "            Novel loci: %7d/%d\t(%5.1f%%)\n",ps->w_loci, ps->total_qloci,sn);
+    sn=(100.0*(double)ps->w_loci)/(double)(ps->total_qloci);
+    fprintf(fout, "            Novel loci: %7" PRId64 "/%" PRId64 "\t(%5.1f%%)\n",ps->w_loci, ps->total_qloci,sn);
     }
 
   }
@@ -1653,7 +1659,7 @@ int inbuf_len=1024; //starting inbuf capacity
 char* inbuf=NULL; // incoming buffer for sequence lines.
 
 void loadRefDescr(const char* fname) {
-  if (inbuf==NULL)  { GMALLOC(inbuf, inbuf_len); }
+  if (inbuf==NULL)  { GMALLOC(inbuf, (size_t)inbuf_len); }
   FILE *f=fopen(fname, "rb");
   if (f==NULL) GError("Error opening exon file: %s\n",fname);
   char* line;
@@ -1661,9 +1667,9 @@ void loadRefDescr(const char* fname) {
   off_t fpos;
   while ((line=fgetline(inbuf, inbuf_len, f, &fpos, &llen))!=NULL) {
    if (strlen(line)<=2) continue;
-   int idlen=strcspn(line,"\t ");
+   size_t idlen=strcspn(line,"\t ");
    char* p=line+idlen;
-   if (idlen<llen && idlen>0) {
+   if (idlen<(size_t)llen && idlen>0) {
      *p=0;
       p++;
       refdescr.Add(line, new GStr(p));
@@ -1673,14 +1679,14 @@ void loadRefDescr(const char* fname) {
 
 GSeqTrack* findGSeqTrack(int gsid) {
   GSeqTrack f(numQryFiles, gsid);
-  int fidx=-1;
+  int64_t fidx=-1;
   if (gseqtracks.Found(&f,fidx))
      return gseqtracks[fidx];
   fidx=gseqtracks.Add(new GSeqTrack(numQryFiles, gsid));
   return gseqtracks[fidx];
 }
 
-GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
+GffObj *findRefMatch(GffObj &m, GLocus &rloc, int64_t &ovlen)
 {
   ovlen = 0;
   CTData *mdata = ((CTData *)m.uptr);
@@ -1699,7 +1705,7 @@ GffObj *findRefMatch(GffObj &m, GLocus &rloc, int &ovlen)
   GffObj *ret = NULL;
   for (int r = 0; r < rloc.mrnas.Count(); r++)
   {
-    int olen = 0;
+    int64_t olen = 0;
     char eqcode = 0;
     if ((eqcode = transcriptMatch(m, *(rloc.mrnas[r]), olen, 0, cdsMatching)) > 0)
     {
@@ -1764,7 +1770,7 @@ void findTMatches(GTrackLocus& loctrack, int qcount) {
 					GffObj* ni_t=loctrack[n]->Get(ni);
 					CTData* ni_d=(CTData*)ni_t->uptr;
 					if (ni_d->eqlist!=NULL && ni_d->eqlist==qi_d->eqlist) continue;
-					int ovlen=0;
+						int64_t ovlen=0;
 					if (transcriptMatch(*qi_t, *ni_t, ovlen, 0, cdsMatching)>0) {
 						CEqMatch m(ni_t, tMatchScore(ovlen, ni_t, qi_t));
 						eqmatches.Add(&m);
@@ -1809,7 +1815,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 			//if (tcons!=NULL) tmaxcov=tcons->covlen;
 		}
 		GffObj* tcons=mrnas[i];
-		int tmaxcov=tcons->covlen;
+		int64_t tmaxcov=tcons->covlen;
 		ovlcode=qtdata->getBestCode();
 
 		if (qtdata->eqhead) {//head of a equivalency chain
@@ -1841,8 +1847,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		GXConsensus* xtcons=NULL;
 		if (chainHead || noChain) {
 			cnum++;
-			int numexons=tcons->exons.Count();
-			if (ft!=NULL) fprintf(ft,"%s_%08d|%d|%d\t",cprefix,cnum, numexons, tcons->covlen);
+			int64_t numexons=tcons->exons.Count();
+			if (ft!=NULL) fprintf(ft,"%s_%08d|%" PRId64 "|%" PRId64 "\t",cprefix,cnum, numexons, tcons->covlen);
 			GXLocus* xloc=qtdata->locus->xlocus;
 			if (xloc!=NULL) {
 				if (ft!=NULL) fprintf(ft, "XLOC_%06d\t",xloc->id);
@@ -1856,8 +1862,8 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 			else {
 				//should NEVER happen!
 				int fidx=qtdata->qset;
-				GError("Error: no XLocus created for transcript %s (file %s) [%d, %d], on %s%c:%d-%d\n", qt.getID(),
-						qryfiles[qtdata->locus->qfidx]->chars(), qtdata->locus->qfidx, fidx, qt.getGSeqName(), qt.strand, qt.start, qt.end);
+					GError("Error: no XLocus created for transcript %s (file %s) [%d, %d], on %s%c:%" PRId64 "-%" PRId64 "\n", qt.getID(),
+							qryfiles[qtdata->locus->qfidx]->chars(), qtdata->locus->qfidx, fidx, qt.getGSeqName(), qt.strand, qt.start, qt.end);
 			}
 			xtcons=addXCons(xloc, ref, ovlcode, tcons, eqchain);
 		} // if chain head or uniq entry (not part of a chain)
@@ -1880,10 +1886,10 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 				mdata=(CTData*)m->uptr;
 				if (mdata->qset==lastpq) {
 					//when a qry file has duplicates/redundant transfrags
-					fprintf(ft,",%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", getGeneID(m), m->getID(),
-							//iround(m->gscore/10),
-							m->exons.Count(),
-							mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+						fprintf(ft,",%s|%s|%" PRId64 "|%8.6f|%8.6f|%8.6f|%" PRId64, getGeneID(m), m->getID(),
+								//iround(m->gscore/10),
+								m->exons.Count(),
+								mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
 					continue;
 				}
 				xtcons->qcount++;
@@ -1891,10 +1897,10 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 					if (ptab>1) fprintf(ft,"\t-");
 					else fprintf(ft,"\t");
 				lastpq = mdata->qset;
-				fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d", lastpq+1, getGeneID(m), m->getID(),
-						//iround(m->gscore/10),
-						m->exons.Count(),
-						mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
+					fprintf(ft,"q%d:%s|%s|%" PRId64 "|%8.6f|%8.6f|%8.6f|%" PRId64, lastpq+1, getGeneID(m), m->getID(),
+							//iround(m->gscore/10),
+							m->exons.Count(),
+							mdata->FPKM, mdata->TPM, mdata->cov, m->covlen);
 			}
 			for (int ptab=qcount-lastpq-1;ptab>0;ptab--)
 				fprintf(ft,"\t-");
@@ -1911,7 +1917,7 @@ void printITrack(FILE* ft, GList<GffObj>& mrnas, int qcount, int& cnum) {
 		for (int ptab=qfidx;ptab>=0;ptab--)
 			if (ptab>0) fprintf(ft,"\t-");
 			else fprintf(ft,"\t");
-		fprintf(ft,"q%d:%s|%s|%d|%8.6f|%8.6f|%8.6f|%d",qfidx+1, getGeneID(qt), qt.getID(),
+		fprintf(ft,"q%d:%s|%s|%" PRId64 "|%8.6f|%8.6f|%8.6f|%" PRId64,qfidx+1, getGeneID(qt), qt.getID(),
 				//iround(qt.gscore/10),
 				qt.exons.Count(),
 				qtdata->FPKM, qtdata->TPM, qtdata->cov, qt.covlen);
@@ -1932,7 +1938,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
 			GffObj& qt=*(loctrack[q]->Get(qi));
 			CTData* qtdata=(CTData*)qt.uptr;
 			GffObj* rmatch=NULL; //== ref match for this row
-			int rovlen=0;
+			int64_t rovlen=0;
 			//if (qtdata->eqnext!=NULL && ((qtdata->eqdata & EQHEAD_TAG)!=0)) {
 			if (qtdata->eqhead) {
 				//EQ chain head -- transfrag equivalency list starts here
@@ -1970,7 +1976,7 @@ void findTRMatch(GTrackLocus& loctrack, int qcount, GLocus& rloc) {
 }
 
 
-bool inPolyRun(char strand, GffObj& m, GList<GLocus>* rloci, int& rlocidx) {
+bool inPolyRun(char strand, GffObj& m, GList<GLocus>* rloci, int64_t& rlocidx) {
  //we are only here if there is no actual overlap between m and any locus in rloci
   if (rloci==NULL || rloci->Count()==0) return false; // || m.exons.Count()>1
   if (strand=='-') {
@@ -2063,12 +2069,12 @@ void reclass_XStrand(GList<GffObj>& mrnas, GList<GLocus>* rloci) {
        if (xcode) {
                // just plain overlap, find the overlapping mrna in rloc
                GffObj* maxovl=NULL;
-               int ovlen=0;
+               int64_t ovlen=0;
                GffObj* max_lovl=NULL; //max len ref transcript
                        // having no exon overlap but simply range overlap (interleaved exons)
                for (int ri=0;ri<rloc->mrnas.Count();ri++) {
                   if (!m.overlap(*(rloc->mrnas[ri]))) continue;
-                  int o=m.exonOverlapLen(*(rloc->mrnas[ri]));
+                  int64_t o=m.exonOverlapLen(*(rloc->mrnas[ri]));
                   if (o>0) {
                      if (o>ovlen) {
                         ovlen=o;
@@ -2089,7 +2095,7 @@ void reclass_XStrand(GList<GffObj>& mrnas, GList<GLocus>* rloci) {
 }
 
 void reclass_mRNAs(char strand, GList<GffObj>& mrnas, GList<GLocus>* rloci, GFaSeqGet *faseq) {
-  int rlocidx=-1;
+  int64_t rlocidx=-1;
   for (int i=0;i<mrnas.Count();i++) {
     GffObj& m=*mrnas[i];
     char ovlcode=((CTData*)m.uptr)->getBestCode();
@@ -2101,7 +2107,7 @@ void reclass_mRNAs(char strand, GList<GffObj>& mrnas, GList<GLocus>* rloci, GFaS
          }
       else { //check for repeat content
          if (faseq!=NULL) {
-            int seqlen;
+            int64_t seqlen;
             char* seq=m.getSpliced(faseq, false, &seqlen);
             //get percentage of lowercase
             int numlc=0;
@@ -2153,7 +2159,7 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
             if (tmapFiles) {
                 char ref_match_len[2048];
                 if (ref!=NULL) {
-                    sprintf(ref_match_len, "%d",ref->covlen);
+                    snprintf(ref_match_len, sizeof(ref_match_len), "%" PRId64, ref->covlen);
                     fprintf(ftr[q],"%s\t%s\t",getGeneID(ref),ref->getID());
                     //rlocus=((CTData*)(ref->uptr))->locus;
                 }
@@ -2164,7 +2170,7 @@ void umrnaReclass(int qcount,  GSeqTrack& gtrack, FILE** ftr, GFaSeqGet* faseq=N
                 //fprintf(ftr[q],"%c\t%s\t%d\t%8.6f\t%8.6f\t%d\n", ovlcode, mdata->mrna->getID(),
                 //    iround(mdata->mrna->gscore/10), mdata->FPKM, mdata->cov, mdata->mrna->covlen);
                 const char* mlocname = (mdata->locus!=NULL) ? mdata->locus->mrna_maxcov->getID() : mdata->mrna->getID();
-                fprintf(ftr[q],"%c\t%s\t%s\t%d\t%8.6f\t%8.6f\t%8.6f\t%d\t%s\t%s\n", mdata->classcode, getGeneID(mdata->mrna), mdata->mrna->getID(),
+                fprintf(ftr[q],"%c\t%s\t%s\t%" PRId64 "\t%8.6f\t%8.6f\t%8.6f\t%" PRId64 "\t%s\t%s\n", mdata->classcode, getGeneID(mdata->mrna), mdata->mrna->getID(),
                         //iround(mdata->mrna->gscore/10),
                 		mdata->mrna->exons.Count(),
 						mdata->FPKM, mdata->TPM, mdata->cov, mdata->mrna->covlen, mlocname, ref_match_len);
@@ -2329,7 +2335,7 @@ void umrnasXStrand(GList<GXLocus>& xloci, GSeqTrack& gtrack) {
         // and qtrackdata->loci_f/r are NOT updated
         for (int i=0;i<qloc->mrnas.Count();i++) {
            qloc->mrnas[i]->strand=newStrand; //assign new strand and move
-           int uidx=qtrackdata->umrnas.IndexOf(qloc->mrnas[i]);
+           int64_t uidx=qtrackdata->umrnas.IndexOf(qloc->mrnas[i]);
            if (uidx>=0) {
         	   qtrackdata->umrnas.Forget(uidx);
         	   qtrackdata->umrnas.Delete(uidx);

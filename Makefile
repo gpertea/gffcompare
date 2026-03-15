@@ -1,8 +1,10 @@
-GCLIB := $(if $(GCLIB),$(GCLIB),./gclib)
+override GCLIB := ./gclib
 
 INCDIRS := -I${GCLIB}
+STRICT_INCDIRS := -isystem ${GCLIB}
 
 BASEFLAGS  = -Wall -Wextra -std=c++11 ${INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
+STRICT_BASEFLAGS = -Wall -Wextra -std=c++11 ${STRICT_INCDIRS} -D_REENTRANT -fno-exceptions -fno-rtti
 
 CXX   := $(if $(CXX),$(CXX),g++)
 LINKER  := $(if $(LINKER),$(LINKER),g++)
@@ -10,6 +12,7 @@ LINKER  := $(if $(LINKER),$(LINKER),g++)
 GCCV8 := $(shell expr `${CXX} -dumpversion | cut -f1 -d.` \>= 8)
 ifeq "$(GCCV8)" "1"
  BASEFLAGS += -Wno-class-memaccess
+ STRICT_BASEFLAGS += -Wno-class-memaccess
 endif
 
 LDFLAGS := $(if $(LDFLAGS),$(LDFLAGS),-g)
@@ -59,9 +62,23 @@ OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
 .PHONY : all gclib-init
 all debug release static memcheck memdebug : gclib-init gffcompare trmap
 
+STRICT_COORD_CXXFLAGS := ${STRICT_BASEFLAGS} -g -O0 -DDEBUG -D_DEBUG -DGDEBUG \
+	-Wconversion -Wsign-conversion -Wformat=2 \
+	-Werror=conversion -Werror=sign-conversion -Werror=format
+STRICT_COORD_SRCS := gtf_tracking.cpp gffcompare.cpp trmap.cpp
+
+.PHONY : strict-coords
+strict-coords: gclib-init
+	@echo "Running strict 64-bit coordinate/index checks (debug flags enabled).."
+	@for src in ${STRICT_COORD_SRCS}; do \
+	  echo "  checking $$src"; \
+	  ${CXX} ${STRICT_COORD_CXXFLAGS} -fsyntax-only $$src || exit 1; \
+	done
+	@echo "strict-coords: no narrowing/cast warnings found for project sources."
+
 gclib-init:
 	@if [ ! -f "${GCLIB}/GBase.h" ]; then \
-	  if [ "${GCLIB}" = "./gclib" ] && [ -d .git ]; then \
+	  if [ -d .git ]; then \
 	    git submodule sync -- gclib; \
 	    git submodule update --init --checkout gclib; \
 	    test -f "${GCLIB}/GBase.h" || { \
@@ -69,8 +86,8 @@ gclib-init:
 	      exit 1; \
 	    }; \
 	  else \
-	    echo "Error: ${GCLIB}/GBase.h not found"; \
-	    echo "Hint: clone with --recurse-submodules or run: git submodule update --init gclib"; \
+	    echo "Error: ${GCLIB}/GBase.h not found (this branch requires ./gclib submodule)."; \
+	    echo "Hint: clone with --recurse-submodules, or run: git submodule update --init --checkout gclib"; \
 	    exit 1; \
 	  fi; \
 	fi

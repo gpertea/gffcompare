@@ -12,6 +12,14 @@
 #include "gff.h"
 #include "GFaSeqGet.h"
 #include "GStr.h"
+#include <type_traits>
+
+typedef char (*GCLibTranscriptMatch64)(GffObj&, GffObj&, int64_t&, int64_t, bool);
+typedef char* (GffObj::*GCLibGetSpliced64)(GFaSeqGet*, bool, int64_t*, int64_t*, int64_t*, GMapSegments*, bool);
+static_assert(std::is_same<decltype(&transcriptMatch), GCLibTranscriptMatch64>::value,
+             "This gffcompare branch requires 64-bit gclib-core: transcriptMatch(..., int64_t&, int64_t, ...)");
+static_assert(std::is_same<decltype(&GffObj::getSpliced), GCLibGetSpliced64>::value,
+             "This gffcompare branch requires 64-bit gclib-core: GffObj::getSpliced(..., int64_t*, ...)");
 
 extern int numQryFiles;
 extern bool gtf_tracking_verbose;
@@ -19,7 +27,7 @@ extern bool gtf_tracking_largeScale;
 extern bool qDupStrict;
 extern bool stricterMatching;
 extern bool cdsMatching;
-extern int terminalMatchRange;
+extern int64_t terminalMatchRange;
 extern bool noMergeCloseExons;
 extern bool cSETMerge;
 extern bool debug;
@@ -32,9 +40,9 @@ extern int intronStickingMax;
 
 int cmpByPtr(const pointer p1, const pointer p2);
 
-uint tMaxOverhang(GffObj& a, GffObj& b); //for two overlapping transcripts, return maximum terminal distance
+int64_t tMaxOverhang(GffObj& a, GffObj& b); //for two overlapping transcripts, return maximum terminal distance
 
-int tMatchScore(int ovlen, GffObj* a, GffObj* b);
+int64_t tMatchScore(int64_t ovlen, GffObj* a, GffObj* b);
 
 bool t_contains(GffObj& a, GffObj& b, bool keepAltTSS, bool intron_poking);
 //returns true only IF b has fewer exons than a AND a "contains" b
@@ -152,7 +160,7 @@ class GFastaHandler {
      }
 };
 
-bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank); //for better CovLink reference ranking
+bool closerRef(GffObj* a, GffObj* b, int64_t numexons, byte rank); //for better CovLink reference ranking
 
 class GLocus;
 
@@ -160,13 +168,12 @@ class COvLink {
 public:
     char code;
     byte rank;
-    int16_t numExons; //number of exons in the query mRNA
+    int64_t numExons; //number of exons in the query mRNA
     GffObj* mrna;
-    int ovlen;
-    int16_t numJmatch; //number of matching junctions in this overlap
-    COvLink(char c=0, GffObj* r=NULL, int exonCount=0, int olen=0, int jmatch=0):code(c),
+    int64_t ovlen;
+    int64_t numJmatch; //number of matching junctions in this overlap
+    COvLink(char c=0, GffObj* r=NULL, int64_t exonCount=0, int64_t olen=0, int64_t jmatch=0):code(c),
     		mrna(r), ovlen(olen), numJmatch(jmatch) {
-    	if (exonCount>255) exonCount=255;
     	numExons=exonCount;
 		rank=classcode_rank(c);
 	}
@@ -192,15 +199,15 @@ public:
 class GISeg: public GSeg {
  public:
    GffObj* t; //pointer to the largest transcript with a segment this exact exon coordinates
-   GISeg(uint s=0,uint e=0, GffObj* ot=NULL):GSeg(s,e) { t=ot; }
+   GISeg(int64_t s=0, int64_t e=0, GffObj* ot=NULL):GSeg(s,e) { t=ot; }
 };
 
 class GIArray:public GArray<GISeg> {
   public:
    GIArray(bool uniq=true):GArray<GISeg>(true,uniq) { }
-   int IAdd(GISeg* item) {
+   int64_t IAdd(GISeg* item) {
      if (item==NULL) return -1;
-     int result=-1;
+     int64_t result=-1;
      if (Found(*item, result)) {
          if (fUnique) {
            //cannot add a duplicate, return index of existing item
@@ -343,11 +350,11 @@ public:
 		ovls.AddIfNew(new COvLink(od.ovlcode, target, mrna->exons.Count(), od.ovlen, od.numJmatch));
 	}
 
-	void addOvl(char code, GffObj* target=NULL, int ovlen=0) {
+	void addOvl(char code, GffObj* target=NULL, int64_t ovlen=0) {
 		ovls.AddIfNew(new COvLink(code, target, mrna->exons.Count(), ovlen));
 	}
 
-	char getBestCode(GffObj** r=NULL, int* ovlen=NULL) {
+	char getBestCode(GffObj** r=NULL, int64_t* ovlen=NULL) {
 		char best_ovlcode = (ovls.Count()>0) ? ovls[0]->code : 0 ;
 		if (best_ovlcode>0) {
 			if (r!=NULL) *r=ovls[0]->mrna;
@@ -365,10 +372,10 @@ public:
 
 
 struct CEqMatch {
-	int score; //match score: overlap length - overhangs
+	int64_t score; //match score: overlap length - overhangs
 	GffObj* t;
 	CTData* tdata;
-	CEqMatch(GffObj* at=NULL, int sc=0):score(sc), t(at), tdata(NULL) {
+	CEqMatch(GffObj* at=NULL, int64_t sc=0):score(sc), t(at), tdata(NULL) {
 		if (at!=NULL) tdata=(CTData*)(at->uptr);
 	}
 	bool operator<(CEqMatch& o) {
@@ -386,7 +393,7 @@ class GXLocus;
 class GXSeg : public GSeg {
 public:
 	int flags;
-	GXSeg(uint s=0, uint e=0, int f=0):GSeg(s,e),flags(f) { }
+	GXSeg(int64_t s=0, int64_t e=0, int f=0):GSeg(s,e),flags(f) { }
 };
 
 void gatherRefLocOvls(GffObj& m, GLocus& rloc);
@@ -479,10 +486,10 @@ public:
 		int i=0; //index of first mexons with a merge
 		int j=0; //index current mrna exon
 		while (i<mexons.Count() && j<locus.mexons.Count()) {
-			uint istart=mexons[i].start;
-			uint iend=mexons[i].end;
-			uint jstart=locus.mexons[j].start;
-			uint jend=locus.mexons[j].end;
+			int64_t istart=mexons[i].start;
+			int64_t iend=mexons[i].end;
+			int64_t jstart=locus.mexons[j].start;
+			int64_t jend=locus.mexons[j].end;
 			if (iend<jstart) { i++; continue; }
 			if (jend<istart) { j++; continue; }
 			//if (mexons[i].overlap(jstart, jend)) {
@@ -494,7 +501,7 @@ public:
 				mexons[i].end=jend;
 				//now this could overlap the next mexon(s), so we have to merge them all
 				while (i<mexons.Count()-1 && mexons[i].end>mexons[i+1].start) {
-					uint nextend=mexons[i+1].end;
+					int64_t nextend=mexons[i+1].end;
 					mexons.Delete(i+1);
 					if (nextend>mexons[i].end) {
 						mexons[i].end=nextend;
@@ -544,10 +551,10 @@ public:
 		int i=0;
 		int j=0;
 		while (i<mexons.Count() && j<loc.mexons.Count()) {
-			uint istart=mexons[i].start;
-			uint iend=mexons[i].end;
-			uint jstart=loc.mexons[j].start;
-			uint jend=loc.mexons[j].end;
+			int64_t istart=mexons[i].start;
+			int64_t iend=mexons[i].end;
+			int64_t jstart=loc.mexons[j].start;
+			int64_t jend=loc.mexons[j].end;
 			if (iend<jstart) { i++; continue; }
 			if (jend<istart) { j++; continue; }
 			//exon overlap found
@@ -560,18 +567,18 @@ public:
 		if (mrnas.Count()>0 && mrna->gseq_id!=gseq_id) return false; //mrna must be on the same genomic seq
 		//check for exon overlap with existing mexons
 		//also update uexons and mexons accordingly, if mrna is added
-		uint mrna_start=mrna->exons.First()->start;
-		uint mrna_end=mrna->exons.Last()->end;
+		int64_t mrna_start=mrna->exons.First()->start;
+		int64_t mrna_end=mrna->exons.Last()->end;
 		if (mrna_start>end || start>mrna_end) return false;
 		bool hasovl=false;
 		int i=0; //index of first mexons with a merge
 		int j=0; //index current mrna exon
 		GArray<int> ovlexons(true,true); //list of mrna exon indexes overlapping mexons
 		while (i<mexons.Count() && j<mrna->exons.Count()) {
-			uint istart=mexons[i].start;
-			uint iend=mexons[i].end;
-			uint jstart=mrna->exons[j]->start;
-			uint jend=mrna->exons[j]->end;
+			int64_t istart=mexons[i].start;
+			int64_t iend=mexons[i].end;
+			int64_t jstart=mrna->exons[j]->start;
+			int64_t jend=mrna->exons[j]->end;
 			if (iend<jstart) { i++; continue; }
 			if (jend<istart) { j++; continue; }
 			//exon overlap found if we're here:
@@ -583,7 +590,7 @@ public:
 				mexons[i].end=jend;
 				//now this could overlap the next mexon(s), so we have to merge them all
 				while (i<mexons.Count()-1 && mexons[i].end>mexons[i+1].start) {
-					uint nextend=mexons[i+1].end;
+					int64_t nextend=mexons[i+1].end;
 					mexons.Delete(i+1);
 					if (nextend>mexons[i].end) {
 						mexons[i].end=nextend;
@@ -661,44 +668,44 @@ public:
     GIArray i_qnotp;  //imperfect qry introns (may overlap but has no "perfect" match)
 
 
-    long qbases_all;
-    long rbases_all; //in fact, it's all ref bases overlapping any query loci
-    int in_rmrnas; //count of ALL ref mrnas and loci given for this region
-    int in_rloci; //not just those overlapping qry data
+    int64_t qbases_all;
+    int64_t rbases_all; //in fact, it's all ref bases overlapping any query loci
+    int64_t in_rmrnas; //count of ALL ref mrnas and loci given for this region
+    int64_t in_rloci; //not just those overlapping qry data
     // this will keep track of total qry loci, mrnas and exons in an area
-    int total_superloci;
-    int total_qloci;
-    int total_qloci_alt; //total qloci with multiple transcripts
+    int64_t total_superloci;
+    int64_t total_qloci;
+    int64_t total_qloci_alt; //total qloci with multiple transcripts
 
-    int total_qmrnas;
-    int total_qexons; //unique exons
-    int total_qmexons;
-    int total_qintrons; //unique introns
-    int total_qichains; //total multi-exon transfrags predicted (incl. duplicates if -G)
+    int64_t total_qmrnas;
+    int64_t total_qexons; //unique exons
+    int64_t total_qmexons;
+    int64_t total_qintrons; //unique introns
+    int64_t total_qichains; //total multi-exon transfrags predicted (incl. duplicates if -G)
 
     // NOTE: if reduceRefs these ref totals are limited to data
     //       from loci overlapping any qry loci
-    int total_rmexons;
-    int total_rloci;
-    int total_rmrnas;
-    int total_richains; //total multi-exon reference transcripts
-    int total_rexons;
-    int total_rintrons; //unique introns
+    int64_t total_rmexons;
+    int64_t total_rloci;
+    int64_t total_rmrnas;
+    int64_t total_richains; //total multi-exon reference transcripts
+    int64_t total_rexons;
+    int64_t total_rintrons; //unique introns
 
     //--- accuracy data after compared to ref loci:
-  int locusQTP;
-  int locusTP; // +1 if ichainTP+mrnaTP > 0
+  int64_t locusQTP;
+  int64_t locusTP; // +1 if ichainTP+mrnaTP > 0
   //int locusAQTP;
 	//int locusATP; // 1 if ichainATP + mrnaATP > 0
-	int locusFP;
+	int64_t locusFP;
 	//int locusAFP;
 	//int locusAFN;
-	int locusFN;
+	int64_t locusFN;
 	//---transcript level accuracy -- all exon coordinates should match (most stringent)
-	int mrnaTP; // number of qry mRNAs with perfect match with ref transcripts
+	int64_t mrnaTP; // number of qry mRNAs with perfect match with ref transcripts
 	//int mrnaATP;
 	//---intron level accuracy (comparing the ordered set of splice sites):
-	int ichainTP; // number of fully matched ref intron chains (# correctly predicted ichains)
+	int64_t ichainTP; // number of fully matched ref intron chains (# correctly predicted ichains)
 
 	//int ichainFP; // number of qry intron chains not matching a reference intron chain
 	//int ichainFN; // number of ref intron chains in this region not being covered by a reference intron chain
@@ -709,8 +716,8 @@ public:
      */
 	//---projected features ---
 	//---exon level accuracy:
-	int exonTP;  //number of matched reference exons (true positives)
-	int exonQTP; //number of query exons matching reference exons
+	int64_t exonTP;  //number of matched reference exons (true positives)
+	int64_t exonQTP; //number of query exons matching reference exons
 	//int exonFP; //number of exons of query with no perfect match with a reference exon
 	//int exonFN; //number of exons of reference with no perfect match with a query exon
 	// same as the above but with acceptable approximation (10bp error window):
@@ -718,9 +725,9 @@ public:
 	int exonAFP;
 	int exonAFN;*/
 
-	int intronTP;  //number of perfectly overlapping introns (true positives)
-	int intronFP; //number of introns of query with no perfect match with a reference intron
-	int intronFN; //number of introns of reference with no perfect match with a query intron
+	int64_t intronTP;  //number of perfectly overlapping introns (true positives)
+	int64_t intronFP; //number of introns of query with no perfect match with a reference intron
+	int64_t intronFN; //number of introns of reference with no perfect match with a query intron
 	/*
 	// same as the above but with acceptable approximation (10bp error window):
 	int intronATP;
@@ -728,18 +735,18 @@ public:
 	int intronAFN;
 	*/
 	//-- EGASP added these too:
-	int m_exons; //number of exons totally missed (not overlapped *at all* by any query exon)
-	int w_exons; //numer of totally wrong exons (query exons not overlapping *at all* any reference exon)
-	int m_introns; //number of introns totally missed (not overlapped *at all* by any query intron)
-	int w_introns; //numer of totally wrong introns (query introns not overlapping *at all* any reference intron)
-	int m_loci; //missed loci
-	int w_loci; //novel/wrong loci
+	int64_t m_exons; //number of exons totally missed (not overlapped *at all* by any query exon)
+	int64_t w_exons; //numer of totally wrong exons (query exons not overlapping *at all* any reference exon)
+	int64_t m_introns; //number of introns totally missed (not overlapped *at all* by any query intron)
+	int64_t w_introns; //numer of totally wrong introns (query introns not overlapping *at all* any reference intron)
+	int64_t m_loci; //missed loci
+	int64_t w_loci; //novel/wrong loci
 	//---base level accuracy
-	long baseTP; //number of overlapping bases
-	long baseFP; //number of qry bases not overlapping reference
-	long baseFN; //number of ref bases not overlapping qry
+	int64_t baseTP; //number of overlapping bases
+	int64_t baseFP; //number of qry bases not overlapping reference
+	int64_t baseFN; //number of ref bases not overlapping qry
 	//            sorted,free,unique       sorted,unique
-    GSuperLocus(uint lstart=0,uint lend=0):qloci(true,false,false),rloci(true,false,false),
+    GSuperLocus(int64_t lstart=0, int64_t lend=0):qloci(true,false,false),rloci(true,false,false),
 	qmrnas(true,false,false), qmexons(true,false), quexons(true,false), qintrons(false),
 	rmrnas(true,false,false), rmexons(true,false), ruexons(true,false), rintrons(false),
 	i_missed(false),i_notp(false), i_qwrong(false), i_qnotp(false){
@@ -918,8 +925,8 @@ class GQCluster : public GList<GffObj> {
  public:
    GffObj* mrna_maxcov;  //transcript with maximum coverage (for largest transcript)
    GffObj* mrna_maxscore; //transcript with maximum gscore ( = major isoform for Cufflinks)
-   uint start;
-   uint end;
+   int64_t start;
+   int64_t end;
    GList<GLocus> qloci;
    //GCluster cl; //just a more compact way of keeping all transcripts in these loci
    GQCluster(GList<GLocus>* loci=NULL):GList<GffObj>(true,false,false),
@@ -1162,7 +1169,7 @@ class GXLocus:public GSeg {
           loc->xlocus=this;
           return true;
           }
-      int f=0;
+      int64_t f=0;
       if (loc->qfidx<0) {
         if (rloci.Found(loc,f)) return false;
         }
@@ -1173,10 +1180,10 @@ class GXLocus:public GSeg {
       int i=0; //index of first mexons with a merge
       int j=0; //index current mrna exon
       while (i<mexons.Count() && j<loc->mexons.Count()) {
-          uint istart=mexons[i].start;
-          uint iend=mexons[i].end;
-          uint jstart=loc->mexons[j].start;
-          uint jend=loc->mexons[j].end;
+          int64_t istart=mexons[i].start;
+          int64_t iend=mexons[i].end;
+          int64_t jstart=loc->mexons[j].start;
+          int64_t jend=loc->mexons[j].end;
           if (iend<jstart) { i++; continue; }
           if (jend<istart) { j++; continue; }
           //if (mexons[i].overlap(jstart, jend)) {
@@ -1188,7 +1195,7 @@ class GXLocus:public GSeg {
               mexons[i].end=jend;
               //now this could overlap the next mexon(s), so we have to merge them all
               while (i<mexons.Count()-1 && mexons[i].end>mexons[i+1].start) {
-                  uint nextend=mexons[i+1].end;
+                  int64_t nextend=mexons[i+1].end;
                   mexons.Delete(i+1);
                   if (nextend>mexons[i].end) {
                       mexons[i].end=nextend;
@@ -1224,10 +1231,10 @@ class GXLocus:public GSeg {
     int i=0; //index of first mexons with a merge
     int j=0; //index current mrna exon
     while (i<mexons.Count() && j<oxloc.mexons.Count()) {
-        uint istart=mexons[i].start;
-        uint iend=mexons[i].end;
-        uint jstart=oxloc.mexons[j].start;
-        uint jend=oxloc.mexons[j].end;
+        int64_t istart=mexons[i].start;
+        int64_t iend=mexons[i].end;
+        int64_t jstart=oxloc.mexons[j].start;
+        int64_t jend=oxloc.mexons[j].end;
         if (iend<jstart) { i++; continue; }
         if (jend<istart) { j++; continue; }
         //if (mexons[i].overlap(jstart, jend)) {
@@ -1239,7 +1246,7 @@ class GXLocus:public GSeg {
             mexons[i].end=jend;
             //now this could overlap the next mexon(s), so we have to merge them all
             while (i<mexons.Count()-1 && mexons[i].end>mexons[i+1].start) {
-                uint nextend=mexons[i+1].end;
+                int64_t nextend=mexons[i+1].end;
                 mexons.Delete(i+1);
                 if (nextend>mexons[i].end) {
                     mexons[i].end=nextend;
@@ -1320,12 +1327,12 @@ class GXLocus:public GSeg {
     	  }
       else { //single exon containment testing
              //this is fuzzy and messy (end result may vary depending on the testing order)
-             int ovlen=a->exons[0]->overlapLen(b->exons[0]);
-             int lmax=a->covlen;
-             int lmin=b->covlen;
+             int64_t ovlen=a->exons[0]->overlapLen(b->exons[0]);
+             int64_t lmax=a->covlen;
+             int64_t lmin=b->covlen;
              if (lmin>lmax) Gswap(lmin,lmax);
              //if (ovlen>=lmax*0.7 || ovlen>=lmin*0.85) { //if at least 85% of the shorter one is covered, it is contained
-             if (ovlen>=lmin*0.85) { //if at least 85% of the shorter one is covered, it is considered contained
+             if ((ovlen*100)>= (lmin*85)) { //if at least 85% of the shorter one is covered, it is considered contained
                 return ((a->covlen>b->covlen) ? 1 : -1);
                 }
               else return 0;
@@ -1371,16 +1378,16 @@ void sort_GSeqs_byName(GList<GSeqData>& seqdata);
 
 /*
 //strict intron chain match, or single-exon match
-bool tMatch(GffObj& a, GffObj& b, int& ovlen, bool relaxed_singleExonMatch=false,
-           bool contain_only=false);
+bool tMatch(GffObj& a, GffObj& b, int64_t& ovlen, bool relaxed_singleExonMatch=false,
+                bool contain_only=false);
 */
 
 //use qsearch to "position" a given coordinate x within a list of transcripts sorted
 //by their start (lowest) coordinate;
 //the return value is the index of the closest GffObj starting just *ABOVE* coordinate x
 //Convention: returns -1 if there is no such GffObj (i.e. mrnas.Last().start <= x)
-int qsearch_mrnas(uint x, GList<GffObj>& mrnas);
-int qsearch_loci(uint x, GList<GLocus>& segs); // same as above, but searching for loci segments
+int64_t qsearch_mrnas(int64_t x, GList<GffObj>& mrnas);
+int64_t qsearch_loci(int64_t x, GList<GLocus>& segs); // same as above, but searching for loci segments
 //--- qsearch transcript overlap (returning -1 when no overlap is found)
 
 GSeqData* getRefData(int gid, GList<GSeqData>& ref_data); //returns reference GSeqData for a specific genomic sequence

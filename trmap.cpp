@@ -3,6 +3,8 @@
 #include "GStr.h"
 #include "GBitVec.h"
 #include "GIntervalTree.hh"
+#include <inttypes.h>
+#include <type_traits>
 
 #define VERSION "0.12.9"
 #define MIN_GFF_VERSION 129
@@ -11,8 +13,15 @@
  #define GFF_VERSION 0
 #endif
 #if GFF_VERSION < MIN_GFF_VERSION
- #error "gff.h version mismatch! Please pull/clone gclib"
+ #error "gff.h version mismatch! This branch requires ./gclib from gclib-core (update submodule)."
 #endif
+
+typedef char (*GCLibTranscriptMatch64)(GffObj&, GffObj&, int64_t&, int64_t, bool);
+typedef char* (GffObj::*GCLibGetSpliced64)(GFaSeqGet*, bool, int64_t*, int64_t*, int64_t*, GMapSegments*, bool);
+static_assert(std::is_same<decltype(&transcriptMatch), GCLibTranscriptMatch64>::value,
+             "trmap requires 64-bit gclib-core: transcriptMatch(..., int64_t&, int64_t, ...)");
+static_assert(std::is_same<decltype(&GffObj::getSpliced), GCLibGetSpliced64>::value,
+             "trmap requires 64-bit gclib-core: GffObj::getSpliced(..., int64_t*, ...)");
 
 
 bool simpleOvl=false;
@@ -61,7 +70,7 @@ const char* USAGE =
 //"  -f <file>    for -J, report \"fusion\" query transcripts, i.e. transcripts\n"
 //"               that overlaps multiple non-overlapping reference genes \n"
 
-bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
+bool closerRef(GffObj* a, GffObj* b, int64_t numexons, byte rank) {
  //this is called when a query overlaps a and b with the same overlap length
  //to decide which of a or b is closer structurally to the query
  // returns true if a is closer, false if b is closer
@@ -69,9 +78,11 @@ bool closerRef(GffObj* a, GffObj* b, int numexons, byte rank) {
  if (rank<CLASSCODE_OVL_RANK) {
 	 //significant intron/exon overlap -- all the 'j' codes, but includes 'e'
 	 if (a->exons.Count()!=b->exons.Count()) {
-		 int ad=a->exons.Count()-numexons;
-		 int bd=b->exons.Count()-numexons;
-		 return (abs(ad)==abs(bd)) ? ad<bd : abs(ad) < abs(bd);
+		 int64_t ad=a->exons.Count()-numexons;
+		 int64_t bd=b->exons.Count()-numexons;
+		 int64_t aad=(ad<0) ? -ad : ad;
+		 int64_t abd=(bd<0) ? -bd : bd;
+		 return (aad==abd) ? ad<bd : aad<abd;
 	 }
  }
  if (a->exons.Count()!=b->exons.Count()) return (a->exons.Count()>b->exons.Count());
@@ -91,7 +102,7 @@ struct TRefOvl {
 	//char ovlcode;
     //int ovlen;
     TOvlData* od; //copy of overlap data
-    int numExons; //number of exons in the query mRNA
+    int64_t numExons; //number of exons in the query mRNA
 
     bool operator<(TRefOvl& b) { //lower = higher priority
 		if (rank==b.rank && b.ref!=NULL && ref!=NULL) {
@@ -111,7 +122,7 @@ struct TRefOvl {
 		return (rank==b.rank && ref==b.ref);
 	}
 
-	TRefOvl(GffObj* r, TOvlData& o, int exonCount=0): ref(r),
+	TRefOvl(GffObj* r, TOvlData& o, int64_t exonCount=0): ref(r),
 		rank(classcode_rank(o.ovlcode)), numExons(exonCount) {
 		od=new TOvlData(o);
 	}
@@ -137,7 +148,7 @@ struct QJData {
 	}
 	// return index of intron matching given intron coordinates if any
 	// assumes that introns are sorted, non-overlapping
-    int findIntron(uint istart, uint iend, int i0=0) {
+    int findIntron(int64_t istart, int64_t iend, int i0=0) {
     	int r=-1;
     	for (int i=i0;i<introns.Count();i++) {
     		if (introns[i].start>istart) break;
@@ -156,7 +167,7 @@ struct QJData {
 		   jmd |= od.jbits;
            inmd |= od.inbits;
 		}
-		int idx=refovls.Add(new TRefOvl(ref, od, t->exons.Count()));
+		int64_t idx=refovls.Add(new TRefOvl(ref, od, t->exons.Count()));
 		#ifndef NDEBUG
 		  if (idx<0) {
 			  refovls.Found(new TRefOvl(ref, od, t->exons.Count()), idx);
@@ -188,8 +199,8 @@ struct RefGene:public GSeg { //start/end: min-max observed for transcripts in th
 	  }
   }
 
-  int getLength() {
-	int r=0;
+  int64_t getLength() {
+	int64_t r=0;
 	for (int i=0;i<mexons.Count();i++)
 		r+=mexons[i].len();
 	return r;
@@ -198,10 +209,10 @@ struct RefGene:public GSeg { //start/end: min-max observed for transcripts in th
   void addTranscript(GffObj& t) {
 	  transcripts.cAdd(&t);
 	  for (int i=0;i<t.exons.Count();i++) { //for each exon of the incoming transcript
-		  int ni=mexons.Add(t.exons[i]); //exon is added to mexons as ordered by start coord
+		  int64_t ni=mexons.Add(t.exons[i]); //exon is added to mexons as ordered by start coord
 		  if (ni>=0) { //exon added, check overlaps with other mexons and merge as needed
-			  int delcount=0;
-			  int j=ni+1;
+			  int64_t delcount=0;
+			  int64_t j=ni+1;
 			  //could overlap the preceding mexon (mexons[ni-1])
 			  if (ni>0 && mexons[ni-1].end>=mexons[ni].start) {
 				  ni--; //merge into preceding exon, which now takes over
@@ -240,11 +251,11 @@ int cmpcstr(const pointer p1, const pointer p2) {
 }
 
 void printNJTab(FILE* f, QJData& d) {
-	fprintf(f, "%s\t%s:%c", d.t->getID(), d.t->getRefName(), d.t->strand);
-	for (int i=0;i<d.t->exons.Count();++i) {
-		char ch=i ? ',' : ':';
-		fprintf(f, "%c%d-%d", ch, d.t->exons[i]->start, d.t->exons[i]->end);
-	}
+		fprintf(f, "%s\t%s:%c", d.t->getID(), d.t->getRefName(), d.t->strand);
+		for (int i=0;i<d.t->exons.Count();++i) {
+			char ch=i ? ',' : ':';
+			fprintf(f, "%c%" PRId64 "-%" PRId64, ch, d.t->exons[i]->start, d.t->exons[i]->end);
+		}
 
 	fprintf(f, "\t");
 
@@ -256,7 +267,7 @@ void printNJTab(FILE* f, QJData& d) {
 		else for (int i=1;i<d.t->exons.Count();i++) {
 			   //every junction is going to be novel:
 			   if (i>1) fprintf(f, ",");
-			   fprintf(f, "%d-%d:nn", d.t->exons[i-1]->end+1, d.t->exons[i]->start-1);
+				   fprintf(f, "%" PRId64 "-%" PRId64 ":nn", d.t->exons[i-1]->end+1, d.t->exons[i]->start-1);
 			 }
 		fprintf(f, "\n");
 		return;
@@ -293,7 +304,7 @@ void printNJTab(FILE* f, QJData& d) {
 	//ss is exon skip code = novel intron, even though both splice sites are known
 	char jj[3]={'.','.','\0'};
 	bool printed=false;
-	for (uint i=0;i<d.jmd.size();i+=2) {
+	for (int64_t i=0;i<d.jmd.size();i+=2) {
 		bool smatch=d.jmd[i];
 		bool ematch=d.jmd[i+1];
 		if (smatch && ematch) {
@@ -305,10 +316,10 @@ void printNJTab(FILE* f, QJData& d) {
 			jj[0]= (smatch) ? '.' : 'n';
 			jj[1]= (ematch) ? '.' : 'n';
 		}
-		int ei = i>>1; // index of exon on the left
+		int64_t ei = i>>1; // index of exon on the left
 		if (printed) fprintf(f, ",");
 		printed=true;
-		fprintf(f, "%d-%d:%s", d.t->exons[ei]->end+1, d.t->exons[ei+1]->start-1, jj);
+		fprintf(f, "%" PRId64 "-%" PRId64 ":%s", d.t->exons[ei]->end+1, d.t->exons[ei+1]->start-1, jj);
 	}
 	if (!printed) fprintf(f, ".");
 	fprintf(f, "\n");
@@ -322,53 +333,53 @@ void printOvlTab(FILE* fwtab, const char* tid, GffObj* r, TOvlData& od, const ch
 	if (tgene==NULL) tgene="";
 	fprintf(fwtab, "%s|%s\t%c\t%s|%s|%s", tid, tgene, od.ovlcode, r->getID(), rgi ,rgn );
 	if (od.ovlen) {
-		float rcov= (100.00*od.ovlen)/r->covlen;
+		double rcov= (100.00*(double)od.ovlen)/(double)r->covlen;
 		fprintf(fwtab, "\t%1.f\t", rcov);
 	} else fprintf(fwtab, "\t.\t");
-    float rovlbias=0;
+    double rovlbias=0;
 	if (r->strand=='-') {
 		if (od.ovlen) {
-			int rs=r->covlen-od.ovlen-(od.ovlRefstart-1);
-			int rsmid=rs+od.ovlen/2;
-			int rmid=r->covlen/2;
+			int64_t rs=r->covlen-od.ovlen-(od.ovlRefstart-1);
+			int64_t rsmid=rs+od.ovlen/2;
+			int64_t rmid=r->covlen/2;
 			//overlap deviation from center (centered=0.5)
-			rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
+			rovlbias=0.5+((double)(rsmid-rmid))/(double)r->covlen;
 			fprintf(fwtab, "%.2f", rovlbias);
 		} else fprintf(fwtab,".");
-		int im=-1;
-		int nint=od.rint.size(); //number of introns
+		int64_t im=-1;
+		int64_t nint=od.rint.size(); //number of introns
 		if (nint)
 			im=od.rint.find_first(); //find first matching intron in ref
 		if (im>=0) {
-		   GVec<int> introns;
+		   GVec<int64_t> introns;
 		   introns.cAdd(nint-im);
 		   while( (im=od.rint.find_next(im))>0 )
 			   introns.cAdd(nint-im);
 		   im=introns.Pop();
-		   fprintf(fwtab,"\t%d:%d", nint, im );
-		   int ni=introns.Count()-1;
-		   for (int i=ni;i>=0;--i)
-			   fprintf(fwtab,",%d", introns[i]);
+		   fprintf(fwtab,"\t%" PRId64 ":%" PRId64, nint, im );
+		   int64_t ni=introns.Count()-1;
+		   for (int64_t i=ni;i>=0;--i)
+			   fprintf(fwtab,",%" PRId64, introns[i]);
 		} else fprintf(fwtab, "\t.");
 	} else {
 		if (od.ovlen) {
-			int rsmid=od.ovlRefstart-1+od.ovlen/2;
-			int rmid=r->covlen/2;
+			int64_t rsmid=od.ovlRefstart-1+od.ovlen/2;
+			int64_t rmid=r->covlen/2;
 			//overlap deviation from center (centered=0.5)
-			rovlbias=0.5+((float)(rsmid-rmid))/r->covlen;
+			rovlbias=0.5+((double)(rsmid-rmid))/(double)r->covlen;
 			fprintf(fwtab, "%.2f", rovlbias);
 		} else fprintf(fwtab,".");
-		int im=-1;
-		int nint=od.rint.size();
+		int64_t im=-1;
+		int64_t nint=od.rint.size();
 		if (nint)
 			im=od.rint.find_first();
 		if (im>=0) {
-			   fprintf(fwtab,"\t%d:%d", nint, im+1 );
+			   fprintf(fwtab,"\t%" PRId64 ":%" PRId64, nint, im+1 );
 		   while( (im=od.rint.find_next(im))>0 )
-			   fprintf(fwtab,",%d", im+1);
+			   fprintf(fwtab,",%" PRId64, im+1);
 		} else fprintf(fwtab, "\t.");
 	}
-	fprintf(fwtab, "\t%d\n", od.numJmatch);
+	fprintf(fwtab, "\t%" PRId64 "\n", (int64_t)od.numJmatch);
 }
 
 void printTabBest(FILE* fwtab, QJData& d) {
@@ -536,9 +547,9 @@ int main(int argc, char* argv[]) {
 				// could be default pseudo-fasta, or simpleOvl
 				if (simpleOvl) { //-S output
 						if (Xstrand || od.ovlen==0) continue;
-						float rcov=(100.00*od.ovlen)/r->covlen;
+						double rcov=(100.00*(double)od.ovlen)/(double)r->covlen;
 						if (!qprinted) {
-							fprintf(outFH, "%s\t%s:%d-%d|%c", t->getID(), gseq, t->start, t->end, t->strand);
+							fprintf(outFH, "%s\t%s:%" PRId64 "-%" PRId64 "|%c", t->getID(), gseq, t->start, t->end, t->strand);
 							qprinted=true;
 						}
 						//append each overlapping referenced to the same line
@@ -546,7 +557,7 @@ int main(int argc, char* argv[]) {
 				} // -S output
 				else if (!(optT || novelJTab)) { //no -T, -J or -S => default detailed pseudo-FASTA output
 						if (!qprinted) {
-							fprintf(outFH, ">%s %s:%d-%d %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
+							fprintf(outFH, ">%s %s:%" PRId64 "-%" PRId64 " %c ", t->getID(), t->getGSeqName(), t->start, t->end, t->strand);
 							t->printExonList(outFH);
 							if (showCDS && t->hasCDS()) {
 							  fprintf(outFH, " CDS:");
@@ -556,7 +567,7 @@ int main(int argc, char* argv[]) {
 							qprinted=true;
 						}
 						fprintf(outFH, "%c\t", od.ovlcode);
-						fprintf(outFH, "%s\t%c\t%d\t%d\t%s\t", r->getGSeqName(), r->strand,
+						fprintf(outFH, "%s\t%c\t%" PRId64 "\t%" PRId64 "\t%s\t", r->getGSeqName(), r->strand,
 							r->start, r->end, r->getID());
 						r->printExonList(outFH);
 						if (showCDS && r->hasCDS()) {
