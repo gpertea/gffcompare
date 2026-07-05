@@ -55,7 +55,7 @@ endif
 
 # C/C++ linker
 
-OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/gff.o \
+OBJS = ${GCLIB}/GFastaIndex.o ${GCLIB}/GFaSeqGet.o ${GCLIB}/GBgzf.o ${GCLIB}/gff.o \
  ${GCLIB}/gdna.o ${GCLIB}/codons.o ${GCLIB}/GBase.o \
  ${GCLIB}/GStr.o ${GCLIB}/GArgs.o
 
