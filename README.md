@@ -60,3 +60,23 @@ If you downloaded the standalone source package `gffread-*.tar.gz` then just unp
 
 This should build the **gffcompare** and **trmap** binary executables in the 
 current directory.
+
+## Updating the bundled gclib core
+
+The `gclib/` directory is a git submodule tracking the shared
+[`gclib-core`](https://github.com/gpertea/gclib-core) repository (branch
+`master`). **Do not edit the core files under `gclib/` directly** — shared-core
+changes must be made in `gclib-core` first, then pulled in here as a submodule
+pointer bump:
+
+```
+# after the change has been committed and pushed in gclib-core:
+cd gffcompare
+git submodule update --remote --checkout gclib   # advance gclib/ to latest master
+git add gclib
+git commit -m "Bump gclib submodule to latest core"
+git push
+```
+
+To build against the currently pinned core commit, no submodule update is
+needed — `make` auto-initializes `./gclib` when required.

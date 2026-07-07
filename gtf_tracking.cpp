@@ -182,22 +182,22 @@ bool intronRedundant(GffObj& ti, GffObj&  tj, bool checkAltTSS=false, bool intro
 			tj.end>ti.exons[i]->end+intron_ovl) return false;
 	//}
 	if (checkAltTSS) {
-		int dist5=-1;
+		int64_t dist5=-1;
 		if (imax==jmax) {  //same number of exons, check 5' distance
 			if (ti.strand=='+') {
-				dist5=abs((int)ti.start-(int)tj.start);
+				dist5=llabs(ti.start-tj.start);
 			} else { //reverse strand
-				dist5=abs((int)ti.end-(int)tj.end);
+				dist5=llabs(ti.end-tj.end);
 			}
 		} else { //different number of introns
 			//if they start with a different 5' intron they are NOT "redundant"
 			if (ti.strand=='+') {
 				if (i_start!=j_start) return false; //different 5'exon
-				dist5=abs((int)ti.start-(int)tj.start);
+				dist5=llabs(ti.start-tj.start);
 			}
 			else { //reverse strand
 				if (imax-i!=jmax-j) return false; //different 5'exon
-				dist5=abs((int)ti.end-(int)tj.end);
+				dist5=llabs(ti.end-tj.end);
 			}
 		}
 		if (dist5>tssDist) return false; //5' end too far, potential alternate TSS
@@ -284,7 +284,7 @@ int parse_mRNAs(GfList& mrnas,
 		int64_t tlen=m->len();
 		if (m->hasErrors() || (tlen+500>GFF_MAX_LOCUS)) { //should probably report these in a file too..
 			if (gtf_tracking_verbose)
-			      GMessage("Warning: transcript %s discarded (structural errors found, length=%d).\n", m->getID(), tlen);
+			      GMessage("Warning: transcript %s discarded (structural errors found, length=%" PRId64 ").\n", m->getID(), tlen);
 			continue;
 			}
 		if (only_multiexon && m->exons.Count()<2) {
